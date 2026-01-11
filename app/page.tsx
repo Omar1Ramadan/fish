@@ -7,6 +7,7 @@ import EEZSelector from "./components/EEZSelector";
 import CountryFilter from "./components/CountryFilter";
 import LoadingScreen from "./components/LoadingScreen";
 import VesselList from "./components/VesselList";
+import type { SARLayerOptions } from "./components/FishingMap";
 
 // Dynamic import to avoid SSR issues with Mapbox
 const FishingMap = dynamic(() => import("./components/FishingMap"), {
@@ -56,6 +57,13 @@ export default function Home() {
     gearType: string;
     fishingHours: number;
   } | null>(null);
+  
+  // SAR layer state
+  const [sarLayer, setSarLayer] = useState<SARLayerOptions>({
+    enabled: false,
+    matched: "all",
+    opacity: 0.9,
+  });
 
   const handleDateChange = useCallback((start: string, end: string) => {
     setStartDate(start);
@@ -83,6 +91,7 @@ export default function Home() {
         excludedCountries={excludedCountries}
         onMapReady={handleMapReady}
         selectedVessel={selectedVessel}
+        sarLayer={sarLayer}
       />
 
       {/* Loading Screen */}
@@ -159,10 +168,86 @@ export default function Home() {
             </div>
           </div>
         </div>
+        
+        {/* SAR Layer Controls */}
+        <div className="mt-3 bg-slate-950/90 backdrop-blur-md border border-purple-900/30 rounded-lg px-4 py-3 shadow-2xl shadow-purple-950/20">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <div className={`w-2 h-2 rounded-full ${sarLayer.enabled ? 'bg-purple-400' : 'bg-slate-600'}`} />
+              <span className="font-mono text-xs text-slate-400 uppercase">
+                SAR Detections
+              </span>
+            </div>
+            <button
+              onClick={() => setSarLayer(prev => ({ ...prev, enabled: !prev.enabled }))}
+              className={`relative w-10 h-5 rounded-full transition-colors ${
+                sarLayer.enabled ? 'bg-purple-600' : 'bg-slate-700'
+              }`}
+            >
+              <div
+                className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
+                  sarLayer.enabled ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          </div>
+          
+          {sarLayer.enabled && (
+            <div className="space-y-3">
+              {/* AIS Match Filter */}
+              <div>
+                <div className="font-mono text-[10px] text-slate-500 uppercase mb-1.5">
+                  AIS Match
+                </div>
+                <div className="flex gap-1">
+                  {(["all", "matched", "unmatched"] as const).map((option) => (
+                    <button
+                      key={option}
+                      onClick={() => setSarLayer(prev => ({ ...prev, matched: option }))}
+                      className={`flex-1 px-2 py-1 rounded text-[10px] font-mono uppercase transition-colors ${
+                        sarLayer.matched === option
+                          ? 'bg-purple-600 text-white'
+                          : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                      }`}
+                    >
+                      {option}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              
+              {/* Opacity Slider */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="font-mono text-[10px] text-slate-500 uppercase">
+                    Opacity
+                  </span>
+                  <span className="font-mono text-[10px] text-purple-400">
+                    {Math.round((sarLayer.opacity ?? 0.9) * 100)}%
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="0.1"
+                  max="1"
+                  step="0.1"
+                  value={sarLayer.opacity ?? 0.9}
+                  onChange={(e) => setSarLayer(prev => ({ ...prev, opacity: parseFloat(e.target.value) }))}
+                  className="w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                />
+              </div>
+              
+              <p className="text-[10px] text-slate-500 leading-relaxed">
+                Satellite radar detections of vessels. Purple intensity shows detection density.
+                <span className="text-purple-400"> Unmatched</span> = no AIS signal (possible dark vessels).
+              </p>
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Vessel List - left side */}
-      <div className="absolute left-4 top-48 pointer-events-auto w-80">
+      {/* Vessel List - left side, position adjusted based on SAR panel */}
+      <div className={`absolute left-4 pointer-events-auto w-80 ${sarLayer.enabled ? 'top-[420px]' : 'top-[280px]'}`}>
         <VesselList
           selectedEEZ={selectedEEZ}
           startDate={startDate}

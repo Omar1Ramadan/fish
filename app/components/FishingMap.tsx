@@ -38,6 +38,12 @@ interface SelectedVessel {
   fishingHours: number;
 }
 
+export interface SARLayerOptions {
+  enabled: boolean;
+  matched?: "all" | "matched" | "unmatched";
+  opacity?: number;
+}
+
 interface FishingMapProps {
   startDate: string;
   endDate: string;
@@ -54,6 +60,7 @@ interface FishingMapProps {
   } | null;
   onMapReady?: (map: mapboxgl.Map) => void;
   selectedVessel?: SelectedVessel | null;
+  sarLayer?: SARLayerOptions;
 }
 
 interface StyleApiResponse {
@@ -74,6 +81,7 @@ export default function FishingMap({
   probabilityCloud,
   onMapReady,
   selectedVessel,
+  sarLayer = { enabled: false, matched: "all", opacity: 0.9 },
 }: FishingMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
@@ -81,7 +89,9 @@ export default function FishingMap({
   const [isLoaded, setIsLoaded] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
   const [tileUrl, setTileUrl] = useState<string | null>(null);
+  const [sarTileUrl, setSarTileUrl] = useState<string | null>(null);
   const [isLoadingStyle, setIsLoadingStyle] = useState(false);
+  const [isLoadingSarStyle, setIsLoadingSarStyle] = useState(false);
   const [mapInstance, setMapInstance] = useState<mapboxgl.Map | null>(null);
   const [isLoadingTrack, setIsLoadingTrack] = useState(false);
   const [vesselTrack, setVesselTrack] = useState<Array<{
@@ -174,6 +184,141 @@ export default function FishingMap({
       return null;
     }
   }, [startDate, endDate, excludedCountries, addDebug]);
+
+  // Fetch SAR style from GFW API
+  const fetchSarStyle = useCallback(async () => {
+    if (!sarLayer.enabled) {
+      log("SAR", "🛰️ SAR layer disabled, skipping style fetch");
+      return null;
+    }
+
+    log("SAR", "🛰️ Fetching SAR style from GFW API", {
+      startDate,
+      endDate,
+      matched: sarLayer.matched,
+    });
+    addDebug(`Fetching SAR style: ${startDate} to ${endDate}`);
+    setIsLoadingSarStyle(true);
+
+    try {
+      // Build URL with SAR-specific params
+      const matchedParam = sarLayer.matched !== "all" ? `&matched=${sarLayer.matched === "matched"}` : "";
+      const url = `/api/sar-style?start=${startDate}&end=${endDate}&interval=DAY${matchedParam}`;
+      log("SAR", "📤 Requesting:", url);
+
+      const response = await fetch(url);
+      const data = await response.json();
+
+      if (!response.ok || data.error) {
+        logError("SAR", "Failed to fetch SAR style:", data.error);
+        addDebug(`SAR style error: ${data.error}`);
+        setIsLoadingSarStyle(false);
+        return null;
+      }
+
+      log("SAR", "✅ SAR tile URL received:", data.tileUrl?.substring(0, 80) + "...");
+      addDebug(`SAR style received! ${data.cached ? "(cached)" : "(fresh)"}`);
+
+      setSarTileUrl(data.tileUrl);
+      setIsLoadingSarStyle(false);
+      return data.tileUrl;
+    } catch (error) {
+      logError("SAR", "Exception fetching SAR style:", error);
+      addDebug(`SAR style exception: ${error}`);
+      setIsLoadingSarStyle(false);
+      return null;
+    }
+  }, [startDate, endDate, sarLayer.enabled, sarLayer.matched, addDebug]);
+
+  // Update SAR layer with the tile URL from GFW
+  const updateSarLayer = useCallback(
+    (gfwSarTileUrl: string | null) => {
+      log("SAR", "🔄 updateSarLayer called", {
+        isLoaded,
+        hasMap: !!map.current,
+        sarEnabled: sarLayer.enabled,
+        urlLength: gfwSarTileUrl?.length,
+      });
+
+      if (!map.current) {
+        log("SAR", "⚠️ No map instance, skipping SAR layer update");
+        return;
+      }
+      if (!isLoaded) {
+        log("SAR", "⚠️ Map not loaded yet, skipping SAR layer update");
+        return;
+      }
+
+      const sourceId = "sar-detections";
+      const layerId = "sar-detections-layer";
+
+      // Remove existing layer and source if they exist
+      if (map.current.getLayer(layerId)) {
+        log("SAR", "🗑️ Removing existing SAR layer:", layerId);
+        map.current.removeLayer(layerId);
+      }
+      if (map.current.getSource(sourceId)) {
+        log("SAR", "🗑️ Removing existing SAR source:", sourceId);
+        map.current.removeSource(sourceId);
+      }
+
+      // If SAR is disabled or no URL, just remove the layer
+      if (!sarLayer.enabled || !gfwSarTileUrl) {
+        log("SAR", "✅ SAR layer removed (disabled or no URL)");
+        return;
+      }
+
+      // Parse the GFW URL to extract the style parameter
+      const gfwUrlObj = new URL(gfwSarTileUrl);
+      const style = gfwUrlObj.searchParams.get("style");
+      const interval = gfwUrlObj.searchParams.get("interval") || "DAY";
+
+      // Build proxy URL for SAR tiles with the style
+      const matchedParam = sarLayer.matched !== "all" ? `&matched=${sarLayer.matched === "matched"}` : "";
+      const proxyTileUrl = `/api/tiles-sar?z={z}&x={x}&y={y}&start=${startDate}&end=${endDate}&style=${encodeURIComponent(
+        style || ""
+      )}&interval=${interval}${matchedParam}`;
+
+      log("SAR", "📍 Adding SAR detections source", {
+        proxyUrl: proxyTileUrl.substring(0, 80) + "...",
+      });
+      addDebug(`Adding SAR tiles with GFW style`);
+
+      try {
+        // Add the SAR tile source
+        map.current.addSource(sourceId, {
+          type: "raster",
+          tiles: [proxyTileUrl],
+          tileSize: 256,
+          minzoom: 0,
+          maxzoom: 12,
+          attribution:
+            '© <a href="https://globalfishingwatch.org">Global Fishing Watch</a> SAR',
+        });
+        log("SAR", "✅ SAR source added successfully");
+
+        // Add the SAR layer with purple styling
+        map.current.addLayer({
+          id: layerId,
+          type: "raster",
+          source: sourceId,
+          paint: {
+            "raster-opacity": sarLayer.opacity ?? 0.9,
+            "raster-fade-duration": 0,
+            "raster-contrast": 0.4,
+            "raster-brightness-min": 0.1,
+            "raster-saturation": 0.5,
+          },
+        });
+        log("SAR", "✅ SAR layer added successfully");
+        addDebug("🛰️ SAR layer added!");
+      } catch (err) {
+        logError("SAR", "Failed to add SAR layer:", err);
+        addDebug(`SAR layer error: ${err}`);
+      }
+    },
+    [startDate, endDate, isLoaded, sarLayer.enabled, sarLayer.matched, sarLayer.opacity, addDebug]
+  );
 
   // Update fishing layer with the tile URL from GFW
   const updateFishingLayer = useCallback(
@@ -869,6 +1014,27 @@ export default function FishingMap({
     }
   }, [isLoaded, vesselTrack, updateVesselTrackLayer]);
 
+  // Fetch SAR style when enabled or dates change
+  useEffect(() => {
+    if (isLoaded && sarLayer.enabled) {
+      log("EFFECT", "🛰️ SAR enabled or dates changed, fetching SAR style");
+      fetchSarStyle();
+    } else if (isLoaded && !sarLayer.enabled) {
+      // Clear SAR layer when disabled
+      log("EFFECT", "🛰️ SAR disabled, removing layer");
+      setSarTileUrl(null);
+      updateSarLayer(null);
+    }
+  }, [isLoaded, sarLayer.enabled, sarLayer.matched, startDate, endDate, fetchSarStyle, updateSarLayer]);
+
+  // Update SAR layer when tile URL is set
+  useEffect(() => {
+    if (isLoaded && sarTileUrl && sarLayer.enabled) {
+      log("EFFECT", "🛰️ SAR tile URL ready, updating layer");
+      updateSarLayer(sarTileUrl);
+    }
+  }, [isLoaded, sarTileUrl, sarLayer.enabled, updateSarLayer]);
+
   return (
     <div className="relative w-full h-full">
       <div ref={mapContainer} className="w-full h-full" />
@@ -930,6 +1096,18 @@ export default function FishingMap({
             <div className="w-5 h-5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
             <span className="text-orange-400 font-mono text-sm">
               Loading vessel track...
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* SAR loading indicator */}
+      {isLoaded && isLoadingSarStyle && (
+        <div className="absolute top-32 left-1/2 transform -translate-x-1/2 bg-black/80 backdrop-blur-sm rounded-lg px-6 py-4 z-40">
+          <div className="flex items-center gap-3">
+            <div className="w-5 h-5 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
+            <span className="text-purple-400 font-mono text-sm">
+              Loading SAR detections...
             </span>
           </div>
         </div>
