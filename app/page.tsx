@@ -47,6 +47,7 @@ export default function Home() {
   const [startDate, setStartDate] = useState("2025-07-01");
   const [endDate, setEndDate] = useState("2025-09-30");
   const [selectedEEZ, setSelectedEEZ] = useState<EEZRegion | null>(null);
+  const [eezBuffer] = useState(200); // 200nm buffer to catch vessels in international waters near EEZ
   const [excludedCountries, setExcludedCountries] = useState<string[]>([]);
   const [isMapReady, setIsMapReady] = useState(false);
   const [showLoadingScreen, setShowLoadingScreen] = useState(true);
@@ -128,6 +129,7 @@ export default function Home() {
         startDate={startDate}
         endDate={endDate}
         selectedEEZ={selectedEEZ}
+        eezBuffer={eezBuffer}
         excludedCountries={excludedCountries}
         predictionResult={predictionResult}
         onMapReady={handleMapReady}
@@ -267,6 +269,7 @@ export default function Home() {
             selectedEEZ={selectedEEZ}
             startDate={startDate}
             endDate={endDate}
+            bufferValue={eezBuffer}
             selectedVessel={selectedVessel}
             onVesselSelect={setSelectedVessel}
             hasPredictionActive={!!predictionResult}
