@@ -100,7 +100,7 @@ export default function Home() {
           isMapReady={isMapReady}
           onLoadingComplete={handleLoadingComplete}
           // probabilityCloud={probabilityCloud}
-      />
+        />
       )}
 
       {/* Header overlay */}
