@@ -15,17 +15,24 @@ const logError = (message: string, error?: unknown) => {
   console.error(`[${timestamp}] [EEZ BOUNDARY API] ❌ ${message}`, error);
 };
 
-// Map GFW region IDs to Marine Regions EEZ names
+// Map GFW region IDs to Marine Regions data
 // Marine Regions is the authoritative source used by GFW for EEZ boundaries
 // See: https://www.marineregions.org/
-const REGION_NAME_MAP: Record<string, string> = {
-  "555635930": "Galapagos", // Galapagos Marine Reserve
-  "555745302": "Peru", // Dorsal de Nasca MPA
-  "5690": "Russia", // Russian EEZ
-  "8465": "Chile", // Chile EEZ
-  "8492": "Indonesia", // Indonesia EEZ
-  "555745303": "Costa Rica", // Cocos Island
-  "555745304": "Colombia", // Malpelo MPA
+// For EEZs, we can use MRGID directly. For MPAs, we use name search.
+const REGION_INFO: Record<string, { name: string; mrgid?: number; isMPA?: boolean }> = {
+  // EEZs - use MRGID for direct lookup
+  "8403": { name: "Ecuador", mrgid: 8403 }, // Ecuador EEZ (includes Galapagos waters)
+  "5690": { name: "Russia", mrgid: 5690 },
+  "8465": { name: "Chile", mrgid: 8465 },
+  "8461": { name: "Peru", mrgid: 8461 },
+  "8448": { name: "Argentina", mrgid: 8448 },
+  "8492": { name: "Indonesia", mrgid: 8492 },
+  "8371": { name: "Senegal", mrgid: 8371 },
+  // MPAs - use name search (different layer)
+  "555635930": { name: "Galapagos", isMPA: true },
+  "555745302": { name: "Nasca", isMPA: true },
+  "555745303": { name: "Cocos", isMPA: true },
+  "555745304": { name: "Malpelo", isMPA: true },
 };
 
 // Marine Regions WFS endpoint
@@ -48,22 +55,22 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Map GFW region ID to Marine Regions EEZ name
-    const regionName = REGION_NAME_MAP[regionId];
+    // Map GFW region ID to Marine Regions info
+    const regionInfo = REGION_INFO[regionId];
     
-    if (!regionName) {
+    if (!regionInfo) {
       log("⚠️ No Marine Regions mapping for region ID", { regionId });
       return NextResponse.json(
         { 
           error: "Region not found in mapping",
           regionId,
-          note: "This region ID is not yet mapped to a Marine Regions EEZ name"
+          note: "This region ID is not yet mapped to Marine Regions"
         },
         { status: 404 }
       );
     }
 
-    log("🌍 Fetching EEZ boundary from Marine Regions", { regionId, regionName });
+    log("🌍 Fetching boundary from Marine Regions", { regionId, regionInfo });
 
     // Fetch from Marine Regions WFS
     // Using GetFeature request to get EEZ boundaries
@@ -71,9 +78,22 @@ export async function GET(request: NextRequest) {
     wfsUrl.searchParams.set("service", "WFS");
     wfsUrl.searchParams.set("version", "1.1.0");
     wfsUrl.searchParams.set("request", "GetFeature");
-    wfsUrl.searchParams.set("typeName", "eez");
     wfsUrl.searchParams.set("outputFormat", "application/json");
-    wfsUrl.searchParams.set("CQL_FILTER", `geoname LIKE '%${regionName}%'`);
+    
+    // Use MRGID for direct lookup (more reliable) or name search for MPAs
+    if (regionInfo.mrgid) {
+      // Direct MRGID lookup for EEZs
+      wfsUrl.searchParams.set("typeName", "MarineRegions:eez");
+      wfsUrl.searchParams.set("CQL_FILTER", `mrgid=${regionInfo.mrgid}`);
+    } else if (regionInfo.isMPA) {
+      // Name search for MPAs (different layer)
+      wfsUrl.searchParams.set("typeName", "MarineRegions:eez");
+      wfsUrl.searchParams.set("CQL_FILTER", `geoname LIKE '%${regionInfo.name}%'`);
+    } else {
+      // Fallback to name search
+      wfsUrl.searchParams.set("typeName", "MarineRegions:eez");
+      wfsUrl.searchParams.set("CQL_FILTER", `geoname LIKE '%${regionInfo.name}%'`);
+    }
 
     log("📤 Requesting from Marine Regions WFS", { url: wfsUrl.toString() });
 
@@ -105,7 +125,8 @@ export async function GET(request: NextRequest) {
       metadata: {
         source: "Marine Regions (marineregions.org)",
         regionId,
-        regionName,
+        regionName: regionInfo.name,
+        mrgid: regionInfo.mrgid,
         bufferValue: bufferValue ? Number(bufferValue) : null,
         bufferUnit,
       }
