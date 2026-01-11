@@ -6,6 +6,7 @@ interface TimelineSliderProps {
   startDate: string;
   endDate: string;
   onDateChange: (start: string, end: string) => void;
+  defaultCollapsed?: boolean;
 }
 
 // GFW data availability - show only past year for cleaner UI
@@ -54,6 +55,7 @@ export default function TimelineSlider({
   startDate,
   endDate,
   onDateChange,
+  defaultCollapsed = false,
 }: TimelineSliderProps) {
   const trackRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState<
@@ -64,6 +66,7 @@ export default function TimelineSlider({
     start: startDate,
     end: endDate,
   });
+  const [isCollapsed, setIsCollapsed] = useState(defaultCollapsed);
 
   const dataStart = getDataStartDate();
   const dataEnd = getDataEndDate();
@@ -203,141 +206,167 @@ export default function TimelineSlider({
 
   return (
     <div className="bg-slate-950/95 backdrop-blur-md border-t border-cyan-900/30 shadow-2xl shadow-cyan-950/20">
-      {/* Main timeline container */}
-      <div className="px-6 py-4">
-        {/* Top row: Date display and controls */}
-        <div className="flex items-center justify-between mb-3">
-          {/* Current selection display */}
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-cyan-400 rounded-full animate-pulse" />
-              <span className="font-mono text-xs text-slate-400 uppercase tracking-wider">
-                Selected Range
-              </span>
-            </div>
-            <div className="font-mono text-sm text-white">
-              <span className="text-cyan-400">{startDate}</span>
-              <span className="text-slate-500 mx-2">→</span>
-              <span className="text-cyan-400">{endDate}</span>
-              <span className="text-slate-500 ml-3 text-xs">
-                ({windowDays} days)
-              </span>
-            </div>
-          </div>
-
-          {/* Quick presets */}
-          <div className="flex items-center gap-2">
-            <span className="font-mono text-xs text-slate-500 uppercase mr-2">
-              Quick:
-            </span>
-            {PRESETS.map((preset) => (
-              <button
-                key={preset.label}
-                onClick={() => handlePreset(preset.days)}
-                className="px-2 py-1 text-xs font-mono bg-slate-800/50 hover:bg-cyan-900/30 border border-slate-700/50 hover:border-cyan-700/50 rounded transition-all text-slate-300 hover:text-cyan-300"
-              >
-                {preset.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Timeline track */}
-        <div className="relative h-16 mt-2">
-          {/* Month markers */}
-          <div className="absolute inset-x-0 top-0 h-4 flex items-end pointer-events-none">
-            {monthMarkers.map(({ label, pos }) => (
-              <div
-                key={label}
-                className="absolute text-[10px] font-mono text-slate-500"
-                style={{ left: `${pos * 100}%`, transform: "translateX(-50%)" }}
-              >
-                {label}
-              </div>
-            ))}
-          </div>
-
-          {/* Track background with month ticks */}
-          <div
-            ref={trackRef}
-            className="absolute inset-x-0 top-5 h-8 bg-slate-800/50 rounded-full border border-slate-700/30 cursor-pointer overflow-hidden"
-            onClick={(e) => {
-              if (!trackRef.current) return;
-              const rect = trackRef.current.getBoundingClientRect();
-              const pos = (e.clientX - rect.left) / rect.width;
-              const windowSize = endPos - startPos;
-              const halfWindow = windowSize / 2;
-              let newStart = pos - halfWindow;
-              let newEnd = pos + halfWindow;
-              if (newStart < 0) {
-                newStart = 0;
-                newEnd = windowSize;
-              }
-              if (newEnd > 1) {
-                newEnd = 1;
-                newStart = 1 - windowSize;
-              }
-              onDateChange(posToDate(newStart), posToDate(newEnd));
-            }}
+      {/* Collapse toggle bar */}
+      <button
+        onClick={() => setIsCollapsed(!isCollapsed)}
+        className="w-full flex items-center justify-center py-1 hover:bg-slate-800/30 transition-colors group"
+      >
+        <div className="flex items-center gap-2">
+          <svg
+            className={`w-4 h-4 text-slate-500 group-hover:text-cyan-400 transition-all ${
+              isCollapsed ? "rotate-180" : ""
+            }`}
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
           >
-            {/* Month tick marks */}
-            {monthMarkers.map(({ label, pos }) => (
-              <div
-                key={label}
-                className="absolute top-0 bottom-0 w-px bg-slate-600/30 pointer-events-none"
-                style={{ left: `${pos * 100}%` }}
-              />
-            ))}
-
-            {/* Selection window */}
-            <div
-              className="absolute top-0 bottom-0 bg-cyan-500/20 border-y border-cyan-500/40 cursor-move z-[5]"
-              style={{
-                left: `${startPos * 100}%`,
-                width: `${(endPos - startPos) * 100}%`,
-              }}
-              onMouseDown={(e) => handleMouseDown(e, "window")}
-            >
-              {/* Gradient overlay - pointer-events-none so clicks pass through */}
-              <div className="absolute inset-0 bg-linear-to-b from-cyan-400/10 to-transparent pointer-events-none" />
-            </div>
-
-            {/* Start handle */}
-            <div
-              className="absolute top-0 bottom-0 w-3 -ml-1.5 cursor-ew-resize group z-10"
-              style={{ left: `${startPos * 100}%` }}
-              onMouseDown={(e) => handleMouseDown(e, "start")}
-            >
-              <div className="absolute inset-y-0 left-1/2 w-1 -ml-0.5 bg-cyan-400 group-hover:bg-cyan-300 transition-colors rounded-full shadow-lg shadow-cyan-500/50" />
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-3 h-6 bg-cyan-400 group-hover:bg-cyan-300 rounded-sm opacity-0 group-hover:opacity-100 transition-opacity" />
-            </div>
-
-            {/* End handle */}
-            <div
-              className="absolute top-0 bottom-0 w-3 -ml-1.5 cursor-ew-resize group z-10"
-              style={{ left: `${endPos * 100}%` }}
-              onMouseDown={(e) => handleMouseDown(e, "end")}
-            >
-              <div className="absolute inset-y-0 left-1/2 w-1 -ml-0.5 bg-cyan-400 group-hover:bg-cyan-300 transition-colors rounded-full shadow-lg shadow-cyan-500/50" />
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-3 h-6 bg-cyan-400 group-hover:bg-cyan-300 rounded-sm opacity-0 group-hover:opacity-100 transition-opacity" />
-            </div>
-          </div>
-
-          {/* Date range labels */}
-          <div className="absolute inset-x-0 bottom-0 flex justify-between text-[10px] font-mono text-slate-500 pointer-events-none">
-            <span>{formatDate(dataStart)}</span>
-            <span>{formatDate(dataEnd)} (latest available)</span>
-          </div>
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M19 9l-7 7-7-7"
+            />
+          </svg>
+          {isCollapsed && (
+            <span className="font-mono text-xs text-slate-500 group-hover:text-cyan-400">
+              <span className="text-cyan-400">{startDate}</span>
+              <span className="text-slate-600 mx-1">→</span>
+              <span className="text-cyan-400">{endDate}</span>
+            </span>
+          )}
         </div>
+      </button>
 
-        {/* Info footer */}
-        <div className="flex items-center justify-between mt-3 pt-2 border-t border-slate-800/50">
-          <div className="text-[10px] text-slate-600 font-mono">
-            <span className="text-yellow-500/70">⚠</span> GFW data has ~5 day
-            delay • Max 366 days per query
+      {/* Main timeline container - collapsible */}
+      <div
+        className={`overflow-hidden transition-all duration-300 ease-in-out ${
+          isCollapsed ? "max-h-0 opacity-0" : "max-h-[200px] opacity-100"
+        }`}
+      >
+        <div className="px-6 pb-4">
+          {/* Top row: Date display and controls */}
+          <div className="flex items-center justify-between mb-3">
+            {/* Current selection display */}
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 bg-cyan-400 rounded-full animate-pulse" />
+                <span className="font-mono text-xs text-slate-400 uppercase tracking-wider">
+                  Selected Range
+                </span>
+              </div>
+              <div className="font-mono text-sm text-white">
+                <span className="text-cyan-400">{startDate}</span>
+                <span className="text-slate-500 mx-2">→</span>
+                <span className="text-cyan-400">{endDate}</span>
+                <span className="text-slate-500 ml-3 text-xs">
+                  ({windowDays} days)
+                </span>
+              </div>
+            </div>
+
+            {/* Quick presets */}
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-xs text-slate-500 uppercase mr-2">
+                Quick:
+              </span>
+              {PRESETS.map((preset) => (
+                <button
+                  key={preset.label}
+                  onClick={() => handlePreset(preset.days)}
+                  className="px-2 py-1 text-xs font-mono bg-slate-800/50 hover:bg-cyan-900/30 border border-slate-700/50 hover:border-cyan-700/50 rounded transition-all text-slate-300 hover:text-cyan-300"
+                >
+                  {preset.label}
+                </button>
+              ))}
+            </div>
           </div>
-          <div className="text-[10px] text-slate-600 font-mono">
-            Drag handles to adjust • Click track to center window
+
+          {/* Timeline track */}
+          <div className="relative h-16 mt-2">
+            {/* Month markers */}
+            <div className="absolute inset-x-0 top-0 h-4 flex items-end pointer-events-none">
+              {monthMarkers.map(({ label, pos }) => (
+                <div
+                  key={label}
+                  className="absolute text-[10px] font-mono text-slate-500"
+                  style={{ left: `${pos * 100}%`, transform: "translateX(-50%)" }}
+                >
+                  {label}
+                </div>
+              ))}
+            </div>
+
+            {/* Track background with month ticks */}
+            <div
+              ref={trackRef}
+              className="absolute inset-x-0 top-5 h-8 bg-slate-800/50 rounded-full border border-slate-700/30 cursor-pointer overflow-hidden"
+              onClick={(e) => {
+                if (!trackRef.current) return;
+                const rect = trackRef.current.getBoundingClientRect();
+                const pos = (e.clientX - rect.left) / rect.width;
+                const windowSize = endPos - startPos;
+                const halfWindow = windowSize / 2;
+                let newStart = pos - halfWindow;
+                let newEnd = pos + halfWindow;
+                if (newStart < 0) {
+                  newStart = 0;
+                  newEnd = windowSize;
+                }
+                if (newEnd > 1) {
+                  newEnd = 1;
+                  newStart = 1 - windowSize;
+                }
+                onDateChange(posToDate(newStart), posToDate(newEnd));
+              }}
+            >
+              {/* Month tick marks */}
+              {monthMarkers.map(({ label, pos }) => (
+                <div
+                  key={label}
+                  className="absolute top-0 bottom-0 w-px bg-slate-600/30 pointer-events-none"
+                  style={{ left: `${pos * 100}%` }}
+                />
+              ))}
+
+              {/* Selection window */}
+              <div
+                className="absolute top-0 bottom-0 bg-cyan-500/20 border-y border-cyan-500/40 cursor-move z-[5]"
+                style={{
+                  left: `${startPos * 100}%`,
+                  width: `${(endPos - startPos) * 100}%`,
+                }}
+                onMouseDown={(e) => handleMouseDown(e, "window")}
+              >
+                {/* Gradient overlay - pointer-events-none so clicks pass through */}
+                <div className="absolute inset-0 bg-linear-to-b from-cyan-400/10 to-transparent pointer-events-none" />
+              </div>
+
+              {/* Start handle */}
+              <div
+                className="absolute top-0 bottom-0 w-3 -ml-1.5 cursor-ew-resize group z-10"
+                style={{ left: `${startPos * 100}%` }}
+                onMouseDown={(e) => handleMouseDown(e, "start")}
+              >
+                <div className="absolute inset-y-0 left-1/2 w-1 -ml-0.5 bg-cyan-400 group-hover:bg-cyan-300 transition-colors rounded-full shadow-lg shadow-cyan-500/50" />
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-3 h-6 bg-cyan-400 group-hover:bg-cyan-300 rounded-sm opacity-0 group-hover:opacity-100 transition-opacity" />
+              </div>
+
+              {/* End handle */}
+              <div
+                className="absolute top-0 bottom-0 w-3 -ml-1.5 cursor-ew-resize group z-10"
+                style={{ left: `${endPos * 100}%` }}
+                onMouseDown={(e) => handleMouseDown(e, "end")}
+              >
+                <div className="absolute inset-y-0 left-1/2 w-1 -ml-0.5 bg-cyan-400 group-hover:bg-cyan-300 transition-colors rounded-full shadow-lg shadow-cyan-500/50" />
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-3 h-6 bg-cyan-400 group-hover:bg-cyan-300 rounded-sm opacity-0 group-hover:opacity-100 transition-opacity" />
+              </div>
+            </div>
+
+            {/* Date range labels */}
+            <div className="absolute inset-x-0 bottom-0 flex justify-between text-[10px] font-mono text-slate-500 pointer-events-none">
+              <span>{formatDate(dataStart)}</span>
+              <span>{formatDate(dataEnd)} (latest available)</span>
+            </div>
           </div>
         </div>
       </div>
