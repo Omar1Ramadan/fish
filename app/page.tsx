@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import dynamic from "next/dynamic";
 import TimelineSlider from "./components/TimelineSlider";
 import EEZSelector from "./components/EEZSelector";
@@ -77,6 +77,24 @@ export default function Home() {
     durationHours?: number;
   } | null>(null);
 
+  // Info popup state
+  const [showInfoPopup, setShowInfoPopup] = useState(false);
+  const infoPopupRef = useRef<HTMLDivElement>(null);
+
+  // Close info popup when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (infoPopupRef.current && !infoPopupRef.current.contains(event.target as Node)) {
+        setShowInfoPopup(false);
+      }
+    };
+
+    if (showInfoPopup) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [showInfoPopup]);
+
   const handleDateChange = useCallback((start: string, end: string) => {
     setStartDate(start);
     setEndDate(end);
@@ -150,27 +168,98 @@ export default function Home() {
       {/* Header overlay */}
       <div className="absolute top-0 left-0 right-0 p-4 pointer-events-none">
         <div className="flex items-start justify-between">
-          {/* Logo/Title */}
+          {/* Logo/Title with More Info button */}
           <div className="pointer-events-auto">
             <div className="bg-slate-950/90 backdrop-blur-md border border-cyan-900/30 rounded-lg px-4 py-3 shadow-2xl shadow-cyan-950/20">
-              <div className="flex items-center gap-3">
-                <div className="relative">
-                  <div className="w-3 h-3 bg-cyan-400 rounded-full" />
-                  <div className="absolute inset-0 w-3 h-3 bg-cyan-400 rounded-full animate-ping opacity-75" />
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="relative">
+                    <div className="w-3 h-3 bg-cyan-400 rounded-full" />
+                    <div className="absolute inset-0 w-3 h-3 bg-cyan-400 rounded-full animate-ping opacity-75" />
+                  </div>
+                  <div>
+                    <h1 className="font-mono text-lg font-bold text-white tracking-tight">
+                      FISHY
+                    </h1>
+                    <p className="font-mono text-[10px] text-cyan-400/70 uppercase tracking-widest">
+                      Dark Vessel Monitor
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h1 className="font-mono text-lg font-bold text-white tracking-tight">
-                    FISHY
-                  </h1>
-                  <p className="font-mono text-[10px] text-cyan-400/70 uppercase tracking-widest">
-                    Dark Vessel Monitor
-                  </p>
-                </div>
+                <button
+                  onClick={() => setShowInfoPopup(true)}
+                  className="px-2.5 py-1 bg-slate-800/60 hover:bg-slate-700 text-slate-400 hover:text-slate-200 rounded text-xs font-mono transition-colors"
+                >
+                  More Info
+                </button>
               </div>
             </div>
           </div>
         </div>
       </div>
+
+      {/* Info Popup Modal */}
+      {showInfoPopup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-auto">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowInfoPopup(false)} />
+          <div ref={infoPopupRef} className="relative bg-slate-950 border border-slate-700/50 rounded-lg shadow-2xl w-96 max-w-[90vw]">
+            {/* Close button */}
+            <button
+              onClick={() => setShowInfoPopup(false)}
+              className="absolute top-3 right-3 p-1 hover:bg-slate-800 rounded transition-colors"
+            >
+              <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+
+            <div className="p-5 space-y-4">
+              {/* Header */}
+              <div>
+                <h2 className="font-mono text-sm font-semibold text-white">FISHY</h2>
+                <p className="font-mono text-[10px] text-slate-500 uppercase">Dark Vessel Monitor</p>
+              </div>
+
+              {/* About */}
+              <div>
+                <h3 className="font-mono text-xs text-slate-500 uppercase mb-2">About</h3>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Monitor fishing vessel activity and detect AIS gaps where vessels go dark, 
+                  potentially indicating illegal fishing activity.
+                </p>
+              </div>
+
+              {/* Data Source */}
+              <div className="pt-3 border-t border-slate-800">
+                <h3 className="font-mono text-xs text-slate-500 uppercase mb-2">Data Source</h3>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  AIS apparent fishing effort from{" "}
+                  <a
+                    href="https://globalfishingwatch.org"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-cyan-400 hover:text-cyan-300 underline underline-offset-2"
+                  >
+                    Global Fishing Watch
+                  </a>
+                  . Brighter areas indicate more fishing hours.
+                </p>
+              </div>
+
+              {/* How to Use */}
+              <div className="pt-3 border-t border-slate-800">
+                <h3 className="font-mono text-xs text-slate-500 uppercase mb-2">How to Use</h3>
+                <ul className="text-xs text-slate-400 space-y-1.5">
+                  <li>1. Select an EEZ region to monitor</li>
+                  <li>2. Scan vessels for AIS gaps</li>
+                  <li>3. Click a vessel to see gap details</li>
+                  <li>4. Use Predict to estimate positions during dark periods</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* EEZ Selector and Country Filter */}
       <div className="absolute top-4 right-4 pointer-events-auto z-20">
@@ -188,25 +277,6 @@ export default function Home() {
 
       {/* Left Panel - Data layers and Vessel List */}
       <div className="absolute left-4 top-24 bottom-20 pointer-events-auto w-80 flex flex-col gap-3 overflow-hidden">
-        {/* Data Source Info */}
-        <div className="bg-slate-950/90 backdrop-blur-md border border-cyan-900/30 rounded-lg px-4 py-3 shadow-2xl shadow-cyan-950/20 flex-shrink-0">
-          <div className="font-mono text-xs text-slate-500 uppercase mb-2">
-            Data Source
-          </div>
-          <p className="text-xs text-slate-400 leading-relaxed">
-            AIS apparent fishing effort from{" "}
-            <a
-              href="https://globalfishingwatch.org"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-cyan-400 hover:text-cyan-300 underline underline-offset-2"
-            >
-              Global Fishing Watch
-            </a>
-            . Brighter areas indicate more fishing hours.
-          </p>
-        </div>
-
         {/* SAR Layer Toggle - Compact */}
         <div className="bg-slate-950/90 backdrop-blur-md border border-purple-900/30 rounded-lg px-4 py-3 shadow-2xl shadow-purple-950/20 flex-shrink-0">
           <div className="flex items-center justify-between">
