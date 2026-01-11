@@ -4,7 +4,6 @@ import { useState, useCallback } from "react";
 import dynamic from "next/dynamic";
 import TimelineSlider from "./components/TimelineSlider";
 import EEZSelector from "./components/EEZSelector";
-import VesselMonitor from "./components/VesselMonitor";
 
 // Dynamic import to avoid SSR issues with Mapbox
 const FishingMap = dynamic(() => import("./components/FishingMap"), {
@@ -28,11 +27,19 @@ interface EEZRegion {
   dataset: string;
 }
 
+// Default to Galapagos Marine Reserve
+const GALAPAGOS_EEZ: EEZRegion = {
+  id: "555635930",
+  name: "Galapagos Marine Reserve",
+  country: "Ecuador",
+  dataset: "public-mpa-all",
+};
+
 export default function Home() {
   // Default dates: Jul 1, 2025 to Sep 30, 2025 (~3 month window)
   const [startDate, setStartDate] = useState("2025-07-01");
   const [endDate, setEndDate] = useState("2025-09-30");
-  const [selectedEEZ, setSelectedEEZ] = useState<EEZRegion | null>(null);
+  const [selectedEEZ, setSelectedEEZ] = useState<EEZRegion | null>(GALAPAGOS_EEZ);
   const [eezBuffer, setEezBuffer] = useState(0);
 
   const handleDateChange = useCallback((start: string, end: string) => {
@@ -77,24 +84,18 @@ export default function Home() {
 
       {/* EEZ Selector */}
       <div className="absolute top-4 right-4 pointer-events-auto">
-        <div className="w-80 space-y-3">
+        <div className="w-80">
           <EEZSelector
             selectedRegion={selectedEEZ}
             onRegionSelect={setSelectedEEZ}
             onBufferChange={setEezBuffer}
             bufferValue={eezBuffer}
           />
-          <VesselMonitor
-            selectedEEZ={selectedEEZ}
-            startDate={startDate}
-            endDate={endDate}
-            bufferValue={eezBuffer}
-          />
         </div>
       </div>
 
-      {/* Legend - positioned above the timeline */}
-      <div className="absolute bottom-36 right-4 pointer-events-auto">
+      {/* Legend - positioned in top right area below EEZ selector */}
+      <div className="absolute top-48 right-4 pointer-events-auto">
         <div className="bg-slate-950/90 backdrop-blur-md border border-cyan-900/30 rounded-lg px-4 py-3 shadow-2xl shadow-cyan-950/20">
           <div className="font-mono text-xs text-slate-500 uppercase mb-2">
             Fishing Intensity

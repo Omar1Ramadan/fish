@@ -64,9 +64,6 @@ export default function TimelineSlider({
     start: startDate,
     end: endDate,
   });
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [playbackSpeed, setPlaybackSpeed] = useState(1); // days per tick
-  const playIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const dataStart = getDataStartDate();
   const dataEnd = getDataEndDate();
@@ -179,39 +176,11 @@ export default function TimelineSlider({
     }
   }, [isDragging, handleMouseMove, handleMouseUp]);
 
-  // Playback logic
-  useEffect(() => {
-    if (isPlaying) {
-      playIntervalRef.current = setInterval(() => {
-        const currentStart = parseDate(startDate);
-        const currentEnd = parseDate(endDate);
-
-        const newStart = addDays(currentStart, playbackSpeed);
-        const newEnd = addDays(currentEnd, playbackSpeed);
-
-        // Stop if we hit the end
-        if (newEnd > dataEnd) {
-          setIsPlaying(false);
-          return;
-        }
-
-        onDateChange(formatDate(newStart), formatDate(newEnd));
-      }, 500); // Update every 500ms
-
-      return () => {
-        if (playIntervalRef.current) {
-          clearInterval(playIntervalRef.current);
-        }
-      };
-    }
-  }, [isPlaying, startDate, endDate, playbackSpeed, dataEnd, onDateChange]);
-
   // Quick preset handler
   const handlePreset = (days: number) => {
     const end = dataEnd;
     const start = addDays(end, -days);
     onDateChange(formatDate(start), formatDate(end));
-    setIsPlaying(false);
   };
 
   // Generate month markers (since we're only showing 1 year)
@@ -271,78 +240,12 @@ export default function TimelineSlider({
               </button>
             ))}
           </div>
-
-          {/* Playback controls */}
-          <div className="flex items-center gap-3">
-            <span className="font-mono text-xs text-slate-500 uppercase">
-              Playback:
-            </span>
-
-            {/* Rewind to start */}
-            <button
-              onClick={() => {
-                const windowDays = daysBetween(
-                  parseDate(startDate),
-                  parseDate(endDate)
-                );
-                const newEnd = addDays(dataStart, windowDays);
-                onDateChange(formatDate(dataStart), formatDate(newEnd));
-                setIsPlaying(false);
-              }}
-              className="p-1.5 text-slate-400 hover:text-cyan-400 hover:bg-slate-800/50 rounded transition-all"
-              title="Go to start"
-            >
-              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z" />
-              </svg>
-            </button>
-
-            {/* Play/Pause */}
-            <button
-              onClick={() => setIsPlaying(!isPlaying)}
-              className={`p-2 rounded-full transition-all ${
-                isPlaying
-                  ? "bg-cyan-500 text-slate-900"
-                  : "bg-slate-800/50 text-slate-300 hover:bg-cyan-900/30 hover:text-cyan-300 border border-slate-700/50"
-              }`}
-              title={isPlaying ? "Pause" : "Play"}
-            >
-              {isPlaying ? (
-                <svg
-                  className="w-4 h-4"
-                  fill="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
-                </svg>
-              ) : (
-                <svg
-                  className="w-4 h-4"
-                  fill="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path d="M8 5v14l11-7z" />
-                </svg>
-              )}
-            </button>
-
-            {/* Speed control */}
-            <select
-              value={playbackSpeed}
-              onChange={(e) => setPlaybackSpeed(Number(e.target.value))}
-              className="bg-slate-800/50 border border-slate-700/50 rounded px-2 py-1 text-xs font-mono text-slate-300 focus:border-cyan-600 focus:outline-none"
-            >
-              <option value={1}>1 day</option>
-              <option value={7}>1 week</option>
-              <option value={30}>1 month</option>
-            </select>
-          </div>
         </div>
 
         {/* Timeline track */}
-        <div className="relative h-12 mt-2">
+        <div className="relative h-16 mt-2">
           {/* Month markers */}
-          <div className="absolute inset-x-0 top-0 h-4 flex items-end">
+          <div className="absolute inset-x-0 top-0 h-4 flex items-end pointer-events-none">
             {monthMarkers.map(({ label, pos }) => (
               <div
                 key={label}
@@ -357,7 +260,7 @@ export default function TimelineSlider({
           {/* Track background with month ticks */}
           <div
             ref={trackRef}
-            className="absolute inset-x-0 top-6 h-6 bg-slate-800/50 rounded-full border border-slate-700/30 cursor-pointer overflow-hidden"
+            className="absolute inset-x-0 top-5 h-8 bg-slate-800/50 rounded-full border border-slate-700/30 cursor-pointer overflow-hidden"
             onClick={(e) => {
               if (!trackRef.current) return;
               const rect = trackRef.current.getBoundingClientRect();
@@ -381,22 +284,22 @@ export default function TimelineSlider({
             {monthMarkers.map(({ label, pos }) => (
               <div
                 key={label}
-                className="absolute top-0 bottom-0 w-px bg-slate-600/30"
+                className="absolute top-0 bottom-0 w-px bg-slate-600/30 pointer-events-none"
                 style={{ left: `${pos * 100}%` }}
               />
             ))}
 
             {/* Selection window */}
             <div
-              className="absolute top-0 bottom-0 bg-cyan-500/20 border-y border-cyan-500/40 cursor-move"
+              className="absolute top-0 bottom-0 bg-cyan-500/20 border-y border-cyan-500/40 cursor-move z-[5]"
               style={{
                 left: `${startPos * 100}%`,
                 width: `${(endPos - startPos) * 100}%`,
               }}
               onMouseDown={(e) => handleMouseDown(e, "window")}
             >
-              {/* Gradient overlay */}
-              <div className="absolute inset-0 bg-linear-to-b from-cyan-400/10 to-transparent" />
+              {/* Gradient overlay - pointer-events-none so clicks pass through */}
+              <div className="absolute inset-0 bg-linear-to-b from-cyan-400/10 to-transparent pointer-events-none" />
             </div>
 
             {/* Start handle */}
@@ -421,7 +324,7 @@ export default function TimelineSlider({
           </div>
 
           {/* Date range labels */}
-          <div className="absolute inset-x-0 bottom-0 flex justify-between text-[10px] font-mono text-slate-500">
+          <div className="absolute inset-x-0 bottom-0 flex justify-between text-[10px] font-mono text-slate-500 pointer-events-none">
             <span>{formatDate(dataStart)}</span>
             <span>{formatDate(dataEnd)} (latest available)</span>
           </div>

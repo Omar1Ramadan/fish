@@ -56,17 +56,10 @@ export default function FishingMap({
   const [mapError, setMapError] = useState<string | null>(null);
   const [tileUrl, setTileUrl] = useState<string | null>(null);
   const [isLoadingStyle, setIsLoadingStyle] = useState(false);
-  const [coordinates, setCoordinates] = useState({
-    lng: -89.5,
-    lat: -1.5,
-    zoom: 4,
-  });
-  const [debugLog, setDebugLog] = useState<string[]>([]);
-  const [showDebugLog, setShowDebugLog] = useState(false);
 
-  const addDebug = useCallback((msg: string) => {
-    setDebugLog((prev) => [...prev.slice(-9), msg]);
-  }, []);
+  // Debug logging (no-op in production)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const addDebug = useCallback((_msg: string) => {}, []);
 
   // Fetch style from GFW API when dates change
   const fetchStyle = useCallback(async () => {
@@ -186,7 +179,7 @@ export default function FishingMap({
           tiles: [proxyTileUrl],
           tileSize: 256,
           minzoom: 0,
-          maxzoom: 6, // Limit to low zoom tiles for blocky appearance
+          maxzoom: 12, // Allow detailed tiles when zooming in
           attribution:
             '© <a href="https://globalfishingwatch.org">Global Fishing Watch</a>',
         });
@@ -377,8 +370,8 @@ export default function FishingMap({
 
         if (!bounds.isEmpty()) {
           map.current.fitBounds(bounds, {
-            padding: 50,
-            maxZoom: 8,
+            padding: { top: 50, right: 50, bottom: 150, left: 50 }, // Extra bottom padding for timeline bar
+            maxZoom: 5, // Don't zoom in too far when fitting to EEZ
           });
         }
 
@@ -476,7 +469,7 @@ export default function FishingMap({
           ],
         },
         center: [-89.5, -1.5],
-        zoom: 4,
+        zoom: 3, // Zoomed out to show wide area
         minZoom: 1,
         maxZoom: 12,
       });
@@ -488,9 +481,9 @@ export default function FishingMap({
       return;
     }
 
-    log("INIT", "🎛️ Adding navigation controls...");
-    map.current.addControl(new mapboxgl.NavigationControl(), "top-right");
-    map.current.addControl(new mapboxgl.ScaleControl(), "bottom-right");
+    log("INIT", "🎛️ Adding scale control...");
+    // Scale control positioned in bottom-left area (above timeline)
+    map.current.addControl(new mapboxgl.ScaleControl(), "bottom-left");
     log("INIT", "✅ Controls added");
 
     const currentMap = map.current;
@@ -548,15 +541,6 @@ export default function FishingMap({
       log("EVENT", "😴 Map idle (all rendering complete)");
     });
 
-    currentMap.on("move", () => {
-      const center = currentMap.getCenter();
-      setCoordinates({
-        lng: parseFloat(center.lng.toFixed(4)),
-        lat: parseFloat(center.lat.toFixed(4)),
-        zoom: parseFloat(currentMap.getZoom().toFixed(2)),
-      });
-    });
-
     log("INIT", "✅ All event listeners attached");
     log("INIT", "⏳ Waiting for map load event...");
 
@@ -584,7 +568,6 @@ export default function FishingMap({
   useEffect(() => {
     if (isLoaded && tileUrl) {
       log("EFFECT", "🗺️ Tile URL ready, updating layer");
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- Updating external Mapbox layer
       updateFishingLayer(tileUrl);
     }
   }, [isLoaded, tileUrl, updateFishingLayer]);
@@ -593,7 +576,6 @@ export default function FishingMap({
   useEffect(() => {
     if (isLoaded) {
       log("EFFECT", "🌍 EEZ region changed, updating boundary layer");
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- Updating external Mapbox layer
       updateEEZLayer(selectedEEZ || null, eezBuffer || 0);
     }
   }, [isLoaded, selectedEEZ, eezBuffer, updateEEZLayer]);
@@ -601,56 +583,6 @@ export default function FishingMap({
   return (
     <div className="relative w-full h-full">
       <div ref={mapContainer} className="w-full h-full" />
-
-      {/* Coordinates display */}
-      <div className="absolute bottom-4 left-4 bg-black/80 backdrop-blur-sm border border-cyan-900/50 rounded px-3 py-2 font-mono text-xs text-cyan-400">
-        <span className="text-cyan-600">LAT</span> {coordinates.lat.toFixed(4)}°
-        |<span className="text-cyan-600 ml-2">LNG</span>{" "}
-        {coordinates.lng.toFixed(4)}° |
-        <span className="text-cyan-600 ml-2">ZOOM</span>{" "}
-        {coordinates.zoom.toFixed(1)}
-      </div>
-
-      {/* Debug panel toggle button */}
-      <button
-        onClick={() => setShowDebugLog(!showDebugLog)}
-        className="absolute top-20 right-4 bg-black/90 backdrop-blur-sm border border-orange-900/50 hover:border-orange-700/70 rounded px-3 py-2 font-mono text-xs text-orange-400 hover:text-orange-300 z-50 transition-colors"
-        title={showDebugLog ? "Hide debug log" : "Show debug log"}
-      >
-        {showDebugLog ? "🔍 Hide Debug" : "🔍 Show Debug"}
-      </button>
-
-      {/* Debug panel */}
-      {showDebugLog && (
-        <div className="absolute top-32 right-4 bg-black/90 backdrop-blur-sm border border-orange-900/50 rounded px-3 py-2 font-mono text-xs max-w-xs z-50">
-          <div className="flex items-center justify-between mb-2">
-            <div className="text-orange-400 font-bold">🔍 DEBUG LOG</div>
-            <button
-              onClick={() => setShowDebugLog(false)}
-              className="text-orange-500 hover:text-orange-400 text-[10px]"
-              title="Close"
-            >
-              ✕
-            </button>
-          </div>
-          <div className="space-y-1 text-orange-300/80 max-h-64 overflow-y-auto">
-            {debugLog.map((msg, i) => (
-              <div key={i} className="text-[10px]">
-                {msg}
-              </div>
-            ))}
-            {debugLog.length === 0 && (
-              <div className="text-[10px] text-orange-500">
-                Check browser console for logs
-              </div>
-            )}
-          </div>
-          <div className="mt-2 pt-2 border-t border-orange-900/30 text-[10px] text-orange-500 space-y-1">
-            <div>Map: {isLoaded ? "✅" : "❌"}</div>
-            <div>Style: {tileUrl ? "✅" : isLoadingStyle ? "⏳" : "❌"}</div>
-          </div>
-        </div>
-      )}
 
       {/* Error display */}
       {mapError && (
