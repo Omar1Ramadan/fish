@@ -532,6 +532,11 @@ export default function FishingMap({
           featureCount: geoJson.features.length,
         });
 
+        // Double-check source doesn't exist before adding
+        if (map.current.getSource(sourceId)) {
+          map.current.removeSource(sourceId);
+        }
+
         // Add GeoJSON source
         map.current.addSource(sourceId, {
           type: "geojson",

@@ -15,17 +15,16 @@ const logError = (message: string, error?: unknown) => {
   console.error(`[${timestamp}] [EEZ BOUNDARY API] ❌ ${message}`, error);
 };
 
-// Map region IDs to Marine Regions MRGID
+// Map MRGID to geoname for Marine Regions WFS lookup
 // Source: https://www.marineregions.org/eezsearch.php
-// Using geoname for lookup (more reliable than MRGID for some regions)
 const REGION_INFO: Record<string, { name: string; geoname: string }> = {
-  "ecuador": { name: "Ecuador (Galapagos)", geoname: "Ecuadorian" },
-  "peru": { name: "Peru", geoname: "Peruvian" },
-  "chile": { name: "Chile", geoname: "Chilean" },
-  "argentina": { name: "Argentina", geoname: "Argentine" },
-  "guinea": { name: "Guinea", geoname: "Guinean Exclusive" },
-  "australia": { name: "Australia", geoname: "Australian" },
-  "japan": { name: "Japan", geoname: "Japanese" },
+  "8403": { name: "Ecuador (Galapagos)", geoname: "Ecuadorian" },
+  "8454": { name: "Peru", geoname: "Peruvian" },
+  "8447": { name: "Chile", geoname: "Chilean" },
+  "8466": { name: "Argentina", geoname: "Argentine" },
+  "8373": { name: "Guinea", geoname: "Guinean Exclusive" },
+  "8492": { name: "Australia", geoname: "Australian" },
+  "8488": { name: "Japan", geoname: "Japanese" },
 };
 
 // Marine Regions WFS endpoint
@@ -47,7 +46,7 @@ export async function GET(request: NextRequest) {
 
   try {
     // Map region ID to Marine Regions info
-    const regionInfo = REGION_INFO[regionId.toLowerCase()];
+    const regionInfo = REGION_INFO[regionId];
 
     if (!regionInfo) {
       log("⚠️ No mapping for region ID", { regionId });
@@ -73,8 +72,7 @@ export async function GET(request: NextRequest) {
     wfsUrl.searchParams.set("CQL_FILTER", `geoname LIKE '%${regionInfo.geoname}%'`);
 
     log("📤 Requesting from Marine Regions WFS", { 
-      geoname: regionInfo.geoname,
-      url: wfsUrl.toString() 
+      geoname: regionInfo.geoname 
     });
 
     const response = await fetch(wfsUrl.toString());
@@ -99,7 +97,6 @@ export async function GET(request: NextRequest) {
     // If multiple features returned, use the first one (main EEZ)
     if (geoJson.features && geoJson.features.length > 1) {
       log("⚠️ Multiple features returned, using first one");
-      // Sort by area (largest first) and take the main EEZ
       geoJson.features = [geoJson.features[0]];
     }
 
