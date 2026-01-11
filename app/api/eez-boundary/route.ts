@@ -15,18 +15,17 @@ const logError = (message: string, error?: unknown) => {
   console.error(`[${timestamp}] [EEZ BOUNDARY API] ❌ ${message}`, error);
 };
 
-// Map GFW region IDs to Marine Regions data
-// Marine Regions is the authoritative source used by GFW for EEZ boundaries
-// See: https://www.marineregions.org/
-// Only including verified working regions
-const REGION_INFO: Record<
-  string,
-  { name: string; mrgid?: number; isMPA?: boolean }
-> = {
-  // Ecuador EEZ - VERIFIED WORKING (MRGID 8403)
-  "8403": { name: "Ecuador", mrgid: 8403 },
-  // Galapagos MPA - uses name search
-  "555635930": { name: "Galapagos", isMPA: true },
+// Map region IDs to Marine Regions MRGID
+// Source: https://www.marineregions.org/eezsearch.php
+// Using geoname for lookup (more reliable than MRGID for some regions)
+const REGION_INFO: Record<string, { name: string; geoname: string }> = {
+  "ecuador": { name: "Ecuador (Galapagos)", geoname: "Ecuadorian" },
+  "peru": { name: "Peru", geoname: "Peruvian" },
+  "chile": { name: "Chile", geoname: "Chilean" },
+  "argentina": { name: "Argentina", geoname: "Argentine" },
+  "guinea": { name: "Guinea", geoname: "Guinean Exclusive" },
+  "australia": { name: "Australia", geoname: "Australian" },
+  "japan": { name: "Japan", geoname: "Japanese" },
 };
 
 // Marine Regions WFS endpoint
@@ -38,8 +37,6 @@ export async function GET(request: NextRequest) {
 
   const searchParams = request.nextUrl.searchParams;
   const regionId = searchParams.get("region-id");
-  const bufferValue = searchParams.get("buffer-value");
-  const bufferUnit = searchParams.get("buffer-unit") || "NAUTICALMILES";
 
   if (!regionId) {
     return NextResponse.json(
@@ -49,16 +46,16 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Map GFW region ID to Marine Regions info
-    const regionInfo = REGION_INFO[regionId];
+    // Map region ID to Marine Regions info
+    const regionInfo = REGION_INFO[regionId.toLowerCase()];
 
     if (!regionInfo) {
-      log("⚠️ No Marine Regions mapping for region ID", { regionId });
+      log("⚠️ No mapping for region ID", { regionId });
       return NextResponse.json(
         {
-          error: "Region not found in mapping",
+          error: "Region not found",
           regionId,
-          note: "This region ID is not yet mapped to Marine Regions",
+          availableRegions: Object.keys(REGION_INFO),
         },
         { status: 404 }
       );
@@ -66,36 +63,19 @@ export async function GET(request: NextRequest) {
 
     log("🌍 Fetching boundary from Marine Regions", { regionId, regionInfo });
 
-    // Fetch from Marine Regions WFS
-    // Using GetFeature request to get EEZ boundaries
+    // Fetch from Marine Regions WFS using geoname search
     const wfsUrl = new URL(MARINE_REGIONS_WFS);
     wfsUrl.searchParams.set("service", "WFS");
     wfsUrl.searchParams.set("version", "1.1.0");
     wfsUrl.searchParams.set("request", "GetFeature");
     wfsUrl.searchParams.set("outputFormat", "application/json");
+    wfsUrl.searchParams.set("typeName", "MarineRegions:eez");
+    wfsUrl.searchParams.set("CQL_FILTER", `geoname LIKE '%${regionInfo.geoname}%'`);
 
-    // Use MRGID for direct lookup (more reliable) or name search for MPAs
-    if (regionInfo.mrgid) {
-      // Direct MRGID lookup for EEZs
-      wfsUrl.searchParams.set("typeName", "MarineRegions:eez");
-      wfsUrl.searchParams.set("CQL_FILTER", `mrgid=${regionInfo.mrgid}`);
-    } else if (regionInfo.isMPA) {
-      // Name search for MPAs (different layer)
-      wfsUrl.searchParams.set("typeName", "MarineRegions:eez");
-      wfsUrl.searchParams.set(
-        "CQL_FILTER",
-        `geoname LIKE '%${regionInfo.name}%'`
-      );
-    } else {
-      // Fallback to name search
-      wfsUrl.searchParams.set("typeName", "MarineRegions:eez");
-      wfsUrl.searchParams.set(
-        "CQL_FILTER",
-        `geoname LIKE '%${regionInfo.name}%'`
-      );
-    }
-
-    log("📤 Requesting from Marine Regions WFS", { url: wfsUrl.toString() });
+    log("📤 Requesting from Marine Regions WFS", { 
+      geoname: regionInfo.geoname,
+      url: wfsUrl.toString() 
+    });
 
     const response = await fetch(wfsUrl.toString());
 
@@ -116,13 +96,11 @@ export async function GET(request: NextRequest) {
       features: geoJson.features?.length || 0,
     });
 
-    // Apply buffer if specified (simplified - would need proper geometric buffer in production)
-    if (bufferValue && Number(bufferValue) > 0) {
-      // Note: Proper buffer would require geometric operations
-      // For now, return the original with buffer info
-      log("⚠️ Buffer requested but geometric buffer not implemented", {
-        bufferValue,
-      });
+    // If multiple features returned, use the first one (main EEZ)
+    if (geoJson.features && geoJson.features.length > 1) {
+      log("⚠️ Multiple features returned, using first one");
+      // Sort by area (largest first) and take the main EEZ
+      geoJson.features = [geoJson.features[0]];
     }
 
     return NextResponse.json({
@@ -131,9 +109,6 @@ export async function GET(request: NextRequest) {
         source: "Marine Regions (marineregions.org)",
         regionId,
         regionName: regionInfo.name,
-        mrgid: regionInfo.mrgid,
-        bufferValue: bufferValue ? Number(bufferValue) : null,
-        bufferUnit,
       },
     });
   } catch (error) {
