@@ -438,10 +438,9 @@ export default function VesselList({
                 <div className="space-y-2">
                   <button
                     onClick={() => checkForGaps(30)}
-                    className="w-full py-2 px-3 bg-amber-600/20 hover:bg-amber-600/30 border border-amber-500/30 rounded-lg transition-colors flex items-center justify-center gap-2"
+                    className="w-full py-2 px-3 bg-slate-700/50 hover:bg-slate-700 border border-slate-600/50 rounded-lg transition-colors"
                   >
-                    <span className="text-amber-400">⚡</span>
-                    <span className="font-mono text-xs text-amber-300">
+                    <span className="font-mono text-xs text-slate-300">
                       Quick Scan (Top 30)
                     </span>
                   </button>
@@ -462,13 +461,13 @@ export default function VesselList({
                     <span className="font-mono text-xs text-slate-400">
                       Checking vessels...
                     </span>
-                    <span className="font-mono text-xs text-amber-400">
+                    <span className="font-mono text-xs text-slate-300">
                       {gapCheckProgress}%
                     </span>
                   </div>
                   <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
                     <div
-                      className="h-full bg-amber-500 transition-all duration-300"
+                      className="h-full bg-slate-500 transition-all duration-300"
                       style={{ width: `${gapCheckProgress}%` }}
                     />
                   </div>
@@ -478,13 +477,10 @@ export default function VesselList({
               {hasGapCheckData && !isCheckingGaps && (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="text-red-400">🔴</span>
-                      <span className="font-mono text-xs text-slate-300">
-                        {vesselsWithGapsCount} vessel
-                        {vesselsWithGapsCount !== 1 ? "s" : ""} with AIS gaps
-                      </span>
-                    </div>
+                    <span className="font-mono text-xs text-slate-300">
+                      {vesselsWithGapsCount} vessel
+                      {vesselsWithGapsCount !== 1 ? "s" : ""} with AIS gaps
+                    </span>
                     <span className="font-mono text-[10px] text-slate-600">
                       {Object.keys(gapChecks).length}/{vessels.length} scanned
                     </span>
@@ -494,7 +490,7 @@ export default function VesselList({
                   {Object.keys(gapChecks).length < vessels.length && (
                     <button
                       onClick={() => checkForGaps()}
-                      className="w-full py-1.5 px-3 bg-amber-900/30 hover:bg-amber-900/40 border border-amber-700/30 rounded text-[10px] font-mono text-amber-400 transition-colors"
+                      className="w-full py-1.5 px-3 bg-slate-700/50 hover:bg-slate-700 border border-slate-600/50 rounded text-[10px] font-mono text-slate-300 transition-colors"
                     >
                       Scan Remaining{" "}
                       {vessels.length - Object.keys(gapChecks).length} Vessels
@@ -506,7 +502,7 @@ export default function VesselList({
                       onClick={() => setShowOnlyWithGaps(!showOnlyWithGaps)}
                       className={`w-full py-1.5 px-3 rounded text-xs font-mono transition-colors ${
                         showOnlyWithGaps
-                          ? "bg-red-600/30 text-red-300 border border-red-500/30"
+                          ? "bg-slate-600/50 text-slate-200 border border-slate-500/50"
                           : "bg-slate-800 text-slate-400 hover:bg-slate-700"
                       }`}
                     >
@@ -566,11 +562,7 @@ export default function VesselList({
                   onClick={() => handleVesselClick(vessel)}
                   className={`w-full px-4 py-3 flex items-center gap-3 border-b border-slate-800/50 last:border-b-0 transition-colors text-left ${
                     selectedVessel?.vesselId === vessel.vesselId
-                      ? hasPredictionActive
-                        ? "bg-orange-950/40 border-l-2 border-l-orange-400"
-                        : "bg-cyan-950/40 border-l-2 border-l-cyan-400"
-                      : vessel.hasGaps
-                      ? "bg-red-950/20 hover:bg-red-950/30"
+                      ? "bg-slate-800/60 border-l-2 border-l-slate-400"
                       : "hover:bg-slate-900/50"
                   }`}
                 >
@@ -587,19 +579,19 @@ export default function VesselList({
                       </p>
                       {/* Prediction active indicator */}
                       {selectedVessel?.vesselId === vessel.vesselId && hasPredictionActive && (
-                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-orange-500/20 border border-orange-500/30 rounded text-[9px] font-mono text-orange-400">
-                          🔮 Predicting
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-slate-600/30 border border-slate-500/30 rounded text-[9px] font-mono text-slate-300">
+                          Active
                         </span>
                       )}
                       {/* Gap indicator */}
                       {vessel.hasGaps && !(selectedVessel?.vesselId === vessel.vesselId && hasPredictionActive) && (
                         <span
-                          className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-red-500/20 border border-red-500/30 rounded text-[9px] font-mono text-red-400"
+                          className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-slate-700/50 border border-slate-600/50 rounded text-[9px] font-mono text-slate-400"
                           title={`${vessel.gapCount} AIS gap${
                             vessel.gapCount !== 1 ? "s" : ""
                           } (${Math.round(vessel.totalGapHours || 0)}h dark)`}
                         >
-                          🔴 {vessel.gapCount}
+                          {vessel.gapCount} gaps
                         </span>
                       )}
                     </div>
@@ -620,7 +612,7 @@ export default function VesselList({
                         vessel.totalGapHours > 0 && (
                           <>
                             <span className="text-slate-700">•</span>
-                            <span className="font-mono text-[10px] text-red-400">
+                            <span className="font-mono text-[10px] text-slate-500">
                               {Math.round(vessel.totalGapHours)}h dark
                             </span>
                           </>
@@ -679,7 +671,7 @@ export default function VesselList({
                   <span className="font-mono text-[10px] text-slate-600">
                     Total dark hours
                   </span>
-                  <span className="font-mono text-[10px] text-red-400">
+                  <span className="font-mono text-[10px] text-slate-400">
                     {Math.round(
                       vesselsWithGaps.reduce(
                         (sum, v) => sum + (v.totalGapHours || 0),

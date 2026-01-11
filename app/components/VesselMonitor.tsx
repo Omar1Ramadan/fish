@@ -329,7 +329,7 @@ export default function VesselMonitor({
                         disabled={isPredicting}
                         className="w-full px-2 py-1 bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/50 rounded text-[10px] font-mono text-cyan-400 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        {isPredicting ? "Predicting..." : "🔮 Predict Path"}
+                        {isPredicting ? "Predicting..." : "Predict Path"}
                       </button>
                       {event.prediction && (
                         <div className="mt-2 text-[10px] text-cyan-300">

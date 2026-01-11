@@ -34,6 +34,23 @@ interface PredictionOverlayProps {
   isVisible: boolean;
 }
 
+// Generate circle coordinates for a given center, radius, and number of points
+function generateCircleCoords(
+  centerLat: number,
+  centerLon: number,
+  radiusDeg: number,
+  numPoints: number = 64
+): [number, number][] {
+  const coords: [number, number][] = [];
+  for (let i = 0; i <= numPoints; i++) {
+    const angle = (i / numPoints) * 2 * Math.PI;
+    const lat = centerLat + radiusDeg * Math.sin(angle);
+    const lon = centerLon + (radiusDeg * Math.cos(angle)) / Math.cos(centerLat * Math.PI / 180);
+    coords.push([lon, lat]);
+  }
+  return coords;
+}
+
 export default function PredictionOverlay({
   map,
   probabilityCloud,
@@ -42,13 +59,25 @@ export default function PredictionOverlay({
 }: PredictionOverlayProps) {
   const markersRef = useRef<mapboxgl.Marker[]>([]);
   
-  const sourceId = "prediction-cloud";
-  const layerId = "prediction-cloud-layer";
+  // Layer IDs for concentric rings
+  const ringLayerIds = [
+    "prediction-ring-0",
+    "prediction-ring-1",
+    "prediction-ring-2",
+    "prediction-ring-3",
+    "prediction-ring-4",
+  ];
+  const ringSourceIds = [
+    "prediction-ring-source-0",
+    "prediction-ring-source-1",
+    "prediction-ring-source-2",
+    "prediction-ring-source-3",
+    "prediction-ring-source-4",
+  ];
   const trajectorySourceId = "prediction-trajectory";
   const trajectoryLayerId = "prediction-trajectory-layer";
-  const circleSourceId = "prediction-circle";
-  const circleLayerId = "prediction-circle-layer";
-  const circleOutlineLayerId = "prediction-circle-outline-layer";
+  const outerCircleSourceId = "prediction-outer-circle";
+  const outerCircleLayerId = "prediction-outer-circle-layer";
 
   useEffect(() => {
     if (!map) return;
@@ -59,21 +88,21 @@ export default function PredictionOverlay({
       markersRef.current.forEach(marker => marker.remove());
       markersRef.current = [];
 
-      // Remove layers first, then sources
-      const layersToRemove = [layerId, trajectoryLayerId, circleLayerId, circleOutlineLayerId];
-      const sourcesToRemove = [sourceId, trajectorySourceId, circleSourceId];
-
-      layersToRemove.forEach(id => {
-        if (map.getLayer(id)) {
-          map.removeLayer(id);
-        }
+      // Remove all ring layers and sources
+      ringLayerIds.forEach(id => {
+        if (map.getLayer(id)) map.removeLayer(id);
+      });
+      ringSourceIds.forEach(id => {
+        if (map.getSource(id)) map.removeSource(id);
       });
 
-      sourcesToRemove.forEach(id => {
-        if (map.getSource(id)) {
-          map.removeSource(id);
-        }
-      });
+      // Remove trajectory
+      if (map.getLayer(trajectoryLayerId)) map.removeLayer(trajectoryLayerId);
+      if (map.getSource(trajectorySourceId)) map.removeSource(trajectorySourceId);
+
+      // Remove outer circle
+      if (map.getLayer(outerCircleLayerId)) map.removeLayer(outerCircleLayerId);
+      if (map.getSource(outerCircleSourceId)) map.removeSource(outerCircleSourceId);
     };
 
     // If not visible or no data, cleanup and return
@@ -146,7 +175,7 @@ export default function PredictionOverlay({
           font-family: monospace;
           white-space: nowrap;
           font-weight: bold;
-        ">START</div>
+        ">LAST KNOWN</div>
       </div>
       <style>
         @keyframes pulse {
@@ -161,31 +190,46 @@ export default function PredictionOverlay({
       .addTo(map);
     markersRef.current.push(startMarker);
 
-    // 2. Add PREDICTED marker (red with crosshair)
+    // 2. Add PREDICTED marker (crosshair style)
     const predictedEl = document.createElement('div');
     predictedEl.innerHTML = `
-      <div style="position: relative;">
-        <div style="
-          width: 24px; 
-          height: 24px; 
-          background: #ef4444; 
-          border: 3px solid white; 
-          border-radius: 50%; 
-          box-shadow: 0 0 15px rgba(239, 68, 68, 0.9);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        ">
-          <div style="
-            width: 8px;
-            height: 8px;
-            background: white;
-            border-radius: 50%;
-          "></div>
-        </div>
+      <div style="position: relative; width: 40px; height: 40px;">
+        <!-- Crosshair lines -->
         <div style="
           position: absolute;
-          top: -35px;
+          top: 50%;
+          left: 0;
+          right: 0;
+          height: 2px;
+          background: #ef4444;
+          transform: translateY(-50%);
+        "></div>
+        <div style="
+          position: absolute;
+          left: 50%;
+          top: 0;
+          bottom: 0;
+          width: 2px;
+          background: #ef4444;
+          transform: translateX(-50%);
+        "></div>
+        <!-- Center dot -->
+        <div style="
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          width: 12px;
+          height: 12px;
+          background: #ef4444;
+          border: 2px solid white;
+          border-radius: 50%;
+          box-shadow: 0 0 15px rgba(239, 68, 68, 0.9);
+        "></div>
+        <!-- Label -->
+        <div style="
+          position: absolute;
+          top: -25px;
           left: 50%;
           transform: translateX(-50%);
           background: #ef4444;
@@ -199,12 +243,12 @@ export default function PredictionOverlay({
         ">PREDICTED</div>
       </div>
     `;
-    const predictedMarker = new mapboxgl.Marker({ element: predictedEl })
+    const predictedMarker = new mapboxgl.Marker({ element: predictedEl, anchor: 'center' })
       .setLngLat([centerLon, centerLat])
       .addTo(map);
     markersRef.current.push(predictedMarker);
 
-    // 3. Add trajectory line (dashed)
+    // 3. Add trajectory line (animated dashed)
     map.addSource(trajectorySourceId, {
       type: "geojson",
       data: {
@@ -232,100 +276,70 @@ export default function PredictionOverlay({
       }
     });
 
-    // 4. Add uncertainty circle
-    const circlePoints = 64;
-    const circleCoords: [number, number][] = [];
-    for (let i = 0; i <= circlePoints; i++) {
-      const angle = (i / circlePoints) * 2 * Math.PI;
-      const lat = centerLat + uncertaintyDeg * Math.sin(angle);
-      const lon = centerLon + uncertaintyDeg * Math.cos(angle) / Math.cos(centerLat * Math.PI / 180);
-      circleCoords.push([lon, lat]);
+    // 4. Add concentric gradient rings (smooth probability visualization)
+    // Rings from inside out with decreasing opacity
+    const ringConfig = [
+      { radiusMultiplier: 0.2, color: "#ff0000", opacity: 0.5 },  // Core - bright red
+      { radiusMultiplier: 0.4, color: "#ff3300", opacity: 0.35 },
+      { radiusMultiplier: 0.6, color: "#ff6600", opacity: 0.25 },
+      { radiusMultiplier: 0.8, color: "#ff9900", opacity: 0.15 },
+      { radiusMultiplier: 1.0, color: "#ffbb00", opacity: 0.08 }, // Outer - faint yellow
+    ];
+
+    // Add rings from outside to inside (so inner rings render on top)
+    for (let i = ringConfig.length - 1; i >= 0; i--) {
+      const ring = ringConfig[i];
+      const radius = uncertaintyDeg * ring.radiusMultiplier;
+      const coords = generateCircleCoords(centerLat, centerLon, radius);
+
+      map.addSource(ringSourceIds[i], {
+        type: "geojson",
+        data: {
+          type: "Feature",
+          geometry: {
+            type: "Polygon",
+            coordinates: [coords]
+          },
+          properties: {}
+        }
+      });
+
+      map.addLayer({
+        id: ringLayerIds[i],
+        type: "fill",
+        source: ringSourceIds[i],
+        paint: {
+          "fill-color": ring.color,
+          "fill-opacity": ring.opacity
+        }
+      });
     }
 
-    map.addSource(circleSourceId, {
+    // 5. Add outer boundary circle (dashed line)
+    const outerCoords = generateCircleCoords(centerLat, centerLon, uncertaintyDeg);
+    
+    map.addSource(outerCircleSourceId, {
       type: "geojson",
       data: {
         type: "Feature",
         geometry: {
           type: "Polygon",
-          coordinates: [circleCoords]
+          coordinates: [outerCoords]
         },
         properties: {}
       }
     });
 
-    // Circle fill
     map.addLayer({
-      id: circleLayerId,
-      type: "fill",
-      source: circleSourceId,
-      paint: {
-        "fill-color": "#f97316",
-        "fill-opacity": 0.15
-      }
-    });
-
-    // Circle outline
-    map.addLayer({
-      id: circleOutlineLayerId,
+      id: outerCircleLayerId,
       type: "line",
-      source: circleSourceId,
+      source: outerCircleSourceId,
       paint: {
-        "line-color": "#f97316",
+        "line-color": "#ffaa00",
         "line-width": 2,
-        "line-dasharray": [4, 2]
+        "line-dasharray": [4, 4],
+        "line-opacity": 0.8
       }
-    });
-
-    // 5. Add probability cloud heatmap
-    map.addSource(sourceId, {
-      type: "geojson",
-      data: probabilityCloud,
-    });
-
-    map.addLayer({
-      id: layerId,
-      type: "heatmap",
-      source: sourceId,
-      maxzoom: 15,
-      paint: {
-        "heatmap-weight": [
-          "interpolate",
-          ["linear"],
-          ["get", "probability"],
-          0, 0,
-          0.01, 0.5,
-          0.1, 1,
-        ],
-        "heatmap-intensity": [
-          "interpolate",
-          ["linear"],
-          ["zoom"],
-          0, 2,
-          5, 4,
-          10, 6,
-        ],
-        "heatmap-color": [
-          "interpolate",
-          ["linear"],
-          ["heatmap-density"],
-          0, "rgba(255, 150, 0, 0)",
-          0.1, "rgba(255, 200, 0, 0.4)",
-          0.3, "rgba(255, 150, 0, 0.6)",
-          0.5, "rgba(255, 100, 0, 0.7)",
-          0.7, "rgba(255, 50, 0, 0.8)",
-          1, "rgba(255, 0, 0, 1)",
-        ],
-        "heatmap-radius": [
-          "interpolate",
-          ["linear"],
-          ["zoom"],
-          0, 10,
-          5, 30,
-          10, 50,
-        ],
-        "heatmap-opacity": 0.8,
-      },
     });
 
     // 6. Fly to show the full prediction
@@ -333,8 +347,8 @@ export default function PredictionOverlay({
     bounds.extend([startLon, startLat]);
     bounds.extend([centerLon, centerLat]);
     // Extend bounds by uncertainty
-    bounds.extend([centerLon - uncertaintyDeg, centerLat - uncertaintyDeg]);
-    bounds.extend([centerLon + uncertaintyDeg, centerLat + uncertaintyDeg]);
+    bounds.extend([centerLon - uncertaintyDeg * 1.2, centerLat - uncertaintyDeg * 1.2]);
+    bounds.extend([centerLon + uncertaintyDeg * 1.2, centerLat + uncertaintyDeg * 1.2]);
 
     map.fitBounds(bounds, {
       padding: 100,
@@ -343,7 +357,7 @@ export default function PredictionOverlay({
     });
 
     return cleanup;
-  }, [map, probabilityCloud, predictionData, isVisible, sourceId, layerId, trajectorySourceId, trajectoryLayerId, circleSourceId, circleLayerId, circleOutlineLayerId]);
+  }, [map, probabilityCloud, predictionData, isVisible, ringLayerIds, ringSourceIds, trajectorySourceId, trajectoryLayerId, outerCircleSourceId, outerCircleLayerId]);
 
   return null;
 }

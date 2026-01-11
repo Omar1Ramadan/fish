@@ -278,41 +278,17 @@ export default function VesselPanel({
         </div>
       </div>
 
-      {/* Aggression Slider */}
-      <div className="px-4 py-3 border-t border-slate-800 bg-gradient-to-r from-slate-900/50 to-red-950/30">
+      {/* Prediction Range Slider */}
+      <div className="px-4 py-3 border-t border-slate-800">
         <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
-            <span className="font-mono text-xs text-slate-400 uppercase">
-              Prediction Range
-            </span>
-            <span 
-              className={`px-1.5 py-0.5 rounded text-[9px] font-mono border ${
-                aggressionFactor < 0.75 
-                  ? "bg-blue-500/20 text-blue-400 border-blue-500/30" 
-                  : aggressionFactor < 1.5 
-                  ? "bg-green-500/20 text-green-400 border-green-500/30"
-                  : aggressionFactor < 3 
-                  ? "bg-orange-500/20 text-orange-400 border-orange-500/30"
-                  : aggressionFactor < 6 
-                  ? "bg-red-500/20 text-red-400 border-red-500/30"
-                  : "bg-purple-500/20 text-purple-400 border-purple-500/30 animate-pulse"
-              }`}
-            >
-              {aggressionFactor < 0.75 ? "Precise" : 
-               aggressionFactor < 1.5 ? "Balanced" : 
-               aggressionFactor < 3 ? "Aggressive" : 
-               aggressionFactor < 6 ? "Extreme" : "MAX RANGE"}
-            </span>
-          </div>
-          <span className={`font-mono text-sm font-bold ${
-            aggressionFactor >= 6 ? "text-purple-400 animate-pulse" : 
-            aggressionFactor >= 3 ? "text-red-400" : "text-orange-400"
-          }`}>
+          <span className="font-mono text-xs text-slate-400 uppercase">
+            Prediction Range
+          </span>
+          <span className="font-mono text-sm font-bold text-slate-300">
             {aggressionFactor.toFixed(1)}x
           </span>
         </div>
-        <div className="flex items-center gap-3">
-          <span className="text-[10px] text-blue-400 font-mono">🎯</span>
+        <div className="flex items-center gap-2">
           <input
             type="range"
             min="0.25"
@@ -320,27 +296,17 @@ export default function VesselPanel({
             step="0.25"
             value={aggressionFactor}
             onChange={(e) => setAggressionFactor(parseFloat(e.target.value))}
-            className="flex-1 h-2 bg-gradient-to-r from-blue-900 via-orange-900 to-red-900 rounded-lg appearance-none cursor-pointer
-                       [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 
-                       [&::-webkit-slider-thumb]:bg-orange-500 [&::-webkit-slider-thumb]:rounded-full 
-                       [&::-webkit-slider-thumb]:shadow-lg [&::-webkit-slider-thumb]:shadow-orange-500/50
-                       [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white
+            className="flex-1 h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer
+                       [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 
+                       [&::-webkit-slider-thumb]:bg-slate-300 [&::-webkit-slider-thumb]:rounded-full 
+                       [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-slate-500
                        [&::-webkit-slider-thumb]:cursor-grab [&::-webkit-slider-thumb]:active:cursor-grabbing"
           />
-          <span className="text-[10px] text-red-400 font-mono">🔥</span>
         </div>
         <div className="flex justify-between mt-1.5">
-          <span className="text-[9px] text-blue-400 font-mono">0.25x Precise</span>
-          <span className="text-[9px] text-slate-500 font-mono">|</span>
-          <span className="text-[9px] text-green-400 font-mono">1x Normal</span>
-          <span className="text-[9px] text-slate-500 font-mono">|</span>
-          <span className="text-[9px] text-red-400 font-mono">10x Max</span>
+          <span className="text-[9px] text-slate-500 font-mono">0.25x</span>
+          <span className="text-[9px] text-slate-500 font-mono">10x</span>
         </div>
-        {aggressionFactor >= 5 && (
-          <div className="mt-2 px-2 py-1 bg-red-950/50 border border-red-500/30 rounded text-[9px] text-red-400 font-mono">
-            ⚠️ High aggression: Prediction may extend far beyond likely positions
-          </div>
-        )}
       </div>
 
       {/* Gaps Section */}
@@ -451,15 +417,9 @@ export default function VesselPanel({
                           <span>Predicting...</span>
                         </>
                       ) : isActive ? (
-                        <>
-                          <span>🔮</span>
-                          <span>Hide Prediction</span>
-                        </>
+                        <span>Hide</span>
                       ) : (
-                        <>
-                          <span>🔮</span>
-                          <span>Predict Path</span>
-                        </>
+                        <span>Predict</span>
                       )}
                     </button>
                   </div>
