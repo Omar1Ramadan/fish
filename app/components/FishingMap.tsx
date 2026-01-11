@@ -34,6 +34,8 @@ interface FishingMapProps {
   endDate: string;
   selectedEEZ?: EEZRegion | null;
   eezBuffer?: number;
+  excludedCountries?: string[];
+  onMapReady?: () => void;
   probabilityCloud?: {
     type: "FeatureCollection";
     features: Array<{
@@ -59,16 +61,14 @@ export default function FishingMap({
   endDate,
   selectedEEZ,
   eezBuffer = 0,
-  probabilityCloud,
-  onMapReady,
 }: FishingMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
+  const orbitAnimationRef = useRef<number | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
   const [tileUrl, setTileUrl] = useState<string | null>(null);
   const [isLoadingStyle, setIsLoadingStyle] = useState(false);
-  const [mapInstance, setMapInstance] = useState<mapboxgl.Map | null>(null);
 
   // Debug logging (no-op in production)
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -76,13 +76,21 @@ export default function FishingMap({
 
   // Fetch style from GFW API when dates change
   const fetchStyle = useCallback(async () => {
-    log("STYLE", "🎨 Fetching style from GFW API", { startDate, endDate });
+    log("STYLE", "🎨 Fetching style from GFW API", {
+      startDate,
+      endDate,
+      excludedCountries,
+    });
     addDebug(`Fetching style: ${startDate} to ${endDate}`);
     setIsLoadingStyle(true);
 
     try {
       // Using bright cyan/turquoise for maximum visibility
-      const url = `/api/generate-style?start=${startDate}&end=${endDate}&color=%2303fcbe&interval=DAY`;
+      const excludeParam =
+        excludedCountries.length > 0
+          ? `&excludeFlags=${excludedCountries.join(",")}`
+          : "";
+      const url = `/api/generate-style?start=${startDate}&end=${endDate}&color=%2303fcbe&interval=DAY${excludeParam}`;
       log("STYLE", "📤 Requesting:", url);
 
       const response = await fetch(url);
@@ -131,7 +139,7 @@ export default function FishingMap({
       setIsLoadingStyle(false);
       return null;
     }
-  }, [startDate, endDate, addDebug]);
+  }, [startDate, endDate, excludedCountries, addDebug]);
 
   // Update fishing layer with the tile URL from GFW
   const updateFishingLayer = useCallback(
@@ -173,9 +181,13 @@ export default function FishingMap({
         gfwUrlObj.searchParams.get("date-range") || `${startDate},${endDate}`;
 
       // Our proxy URL with the style from GFW
+      const excludeParam =
+        excludedCountries.length > 0
+          ? `&excludeFlags=${excludedCountries.join(",")}`
+          : "";
       const proxyTileUrl = `/api/tiles?z={z}&x={x}&y={y}&start=${startDate}&end=${endDate}&style=${encodeURIComponent(
         style || ""
-      )}&interval=${interval}`;
+      )}&interval=${interval}${excludeParam}`;
 
       log("LAYER", "📍 Adding fishing effort source", {
         proxyUrl: proxyTileUrl.substring(0, 80) + "...",
@@ -218,7 +230,7 @@ export default function FishingMap({
         addDebug(`Layer error: ${err}`);
       }
     },
-    [startDate, endDate, isLoaded, addDebug]
+    [startDate, endDate, isLoaded, excludedCountries, addDebug]
   );
 
   // Update EEZ boundary layer
@@ -235,6 +247,9 @@ export default function FishingMap({
         log("EEZ", "⚠️ Map not ready, skipping EEZ layer update");
         return;
       }
+
+      // Stop any existing orbit animation when changing EEZ
+      stopOrbitAnimation();
 
       const sourceId = "eez-boundary";
       const layerId = "eez-boundary-layer";
@@ -382,10 +397,19 @@ export default function FishingMap({
         );
 
         if (!bounds.isEmpty()) {
+          // Fly to bounds with cinematic camera
           map.current.fitBounds(bounds, {
-            padding: { top: 50, right: 50, bottom: 150, left: 50 }, // Extra bottom padding for timeline bar
+            padding: { top: 100, right: 100, bottom: 200, left: 100 }, // Extra padding for 3D view
             maxZoom: 5, // Don't zoom in too far when fitting to EEZ
+            pitch: 50, // Tilt camera for 3D effect
+            bearing: 0,
+            duration: 1800, // Faster fly-in
           });
+
+          // Start orbit after fly-in completes
+          setTimeout(() => {
+            startOrbitAnimation();
+          }, 1900);
         }
 
         log("EEZ", "✅ Boundary displayed", {
@@ -400,7 +424,7 @@ export default function FishingMap({
         );
       }
     },
-    [isLoaded, addDebug]
+    [isLoaded, addDebug, startOrbitAnimation, stopOrbitAnimation]
   );
 
   // Initialize map
@@ -505,6 +529,10 @@ export default function FishingMap({
     currentMap.on("load", () => {
       log("EVENT", "🎉 MAP LOAD EVENT FIRED - Map is ready!");
       setIsLoaded(true);
+      // Notify parent that map is ready
+      if (onMapReady) {
+        onMapReady();
+      }
       setMapInstance(currentMap);
       if (onMapReady) {
         onMapReady(currentMap);
@@ -563,9 +591,15 @@ export default function FishingMap({
 
     return () => {
       log("CLEANUP", "🧹 Cleaning up map instance");
+      // Stop orbit animation
+      if (orbitAnimationRef.current !== null) {
+        cancelAnimationFrame(orbitAnimationRef.current);
+        orbitAnimationRef.current = null;
+      }
       currentMap.remove();
       map.current = null; // Clear ref so next mount can reinitialize
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Only run on mount, onMapReady is stable via useCallback
   }, []);
 
   // Fetch style and update layer when map loads or dates change
@@ -578,8 +612,7 @@ export default function FishingMap({
       });
       fetchStyle();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLoaded, startDate, endDate]);
+  }, [isLoaded, startDate, endDate, excludedCountries, fetchStyle]);
 
   // Update layer when tile URL is set
   useEffect(() => {

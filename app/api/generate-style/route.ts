@@ -35,11 +35,12 @@ export async function GET(request: NextRequest) {
   const endDate = searchParams.get("end") || "2024-03-31";
   const color = searchParams.get("color") || "%2303fcbe"; // Bright cyan/turquoise for visibility
   const interval = searchParams.get("interval") || "DAY";
+  const excludeFlags = searchParams.get("excludeFlags") || ""; // Comma-separated country codes to exclude
 
-  log("📍 Request params:", { startDate, endDate, color, interval });
+  log("📍 Request params:", { startDate, endDate, color, interval, excludeFlags });
 
   // Check cache
-  const cacheKey = `${startDate}-${endDate}-${color}-${interval}`;
+  const cacheKey = `${startDate}-${endDate}-${color}-${interval}-${excludeFlags}`;
   const cached = styleCache.get(cacheKey);
   if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
     log("✅ Returning cached style");
@@ -73,7 +74,18 @@ export async function GET(request: NextRequest) {
   gfwUrl.searchParams.set("color", decodeURIComponent(color));
 
   // Build URL with datasets[0] manually to avoid bracket encoding
-  const fullUrl = `${gfwUrl.toString()}&datasets[0]=public-global-fishing-effort:latest`;
+  let fullUrl = `${gfwUrl.toString()}&datasets[0]=public-global-fishing-effort:latest`;
+
+  // Add flag exclusion filter if specified
+  if (excludeFlags && excludeFlags.length > 0) {
+    const flagList = excludeFlags
+      .split(",")
+      .map((f) => `'${f.trim()}'`)
+      .join(",");
+    const filter = `flag not in (${flagList})`;
+    fullUrl += `&filters[0]=${encodeURIComponent(filter)}`;
+    log("🚩 Applying flag filter:", filter);
+  }
 
   log("🌐 GFW generate-png URL:", fullUrl);
 
