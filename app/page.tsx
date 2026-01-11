@@ -125,7 +125,6 @@ export default function Home() {
         </div>
       </div>
 
-
       {/* Info panel */}
       <div className="absolute left-4 top-24 pointer-events-auto max-w-xs">
         <div className="bg-slate-950/90 backdrop-blur-md border border-cyan-900/30 rounded-lg px-4 py-3 shadow-2xl shadow-cyan-950/20">

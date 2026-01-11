@@ -80,7 +80,16 @@ export default function Globe3D({ size = 200 }: Globe3DProps) {
 
     // Longitude lines (meridians)
     for (let i = 0; i < 12; i++) {
-      const curve = new THREE.EllipseCurve(0, 0, 1.01, 1.01, 0, 2 * Math.PI, false, 0);
+      const curve = new THREE.EllipseCurve(
+        0,
+        0,
+        1.01,
+        1.01,
+        0,
+        2 * Math.PI,
+        false,
+        0
+      );
       const points = curve.getPoints(64);
       const geometry = new THREE.BufferGeometry().setFromPoints(
         points.map((p) => new THREE.Vector3(p.x, p.y, 0))
@@ -138,10 +147,5 @@ export default function Globe3D({ size = 200 }: Globe3DProps) {
     };
   }, [size]);
 
-  return (
-    <div
-      ref={containerRef}
-      style={{ width: size, height: size }}
-    />
-  );
+  return <div ref={containerRef} style={{ width: size, height: size }} />;
 }

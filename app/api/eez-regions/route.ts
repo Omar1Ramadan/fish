@@ -13,13 +13,48 @@ const log = (message: string, data?: unknown) => {
 // Common EEZ regions with their IDs (from GFW reference data)
 // These are well-known EEZ IDs that users might want to monitor
 const COMMON_EEZ_REGIONS = [
-  { id: "555635930", name: "Galapagos Marine Reserve", country: "Ecuador", dataset: "public-mpa-all" },
-  { id: "555745302", name: "Dorsal de Nasca MPA", country: "Peru", dataset: "public-mpa-all" },
-  { id: "5690", name: "Russian EEZ", country: "Russia", dataset: "public-eez-areas" },
-  { id: "8465", name: "Chile EEZ", country: "Chile", dataset: "public-eez-areas" },
-  { id: "8492", name: "Indonesia EEZ", country: "Indonesia", dataset: "public-eez-areas" },
-  { id: "555745303", name: "Cocos Island", country: "Costa Rica", dataset: "public-mpa-all" },
-  { id: "555745304", name: "Malpelo MPA", country: "Colombia", dataset: "public-mpa-all" },
+  {
+    id: "555635930",
+    name: "Galapagos Marine Reserve",
+    country: "Ecuador",
+    dataset: "public-mpa-all",
+  },
+  {
+    id: "555745302",
+    name: "Dorsal de Nasca MPA",
+    country: "Peru",
+    dataset: "public-mpa-all",
+  },
+  {
+    id: "5690",
+    name: "Russian EEZ",
+    country: "Russia",
+    dataset: "public-eez-areas",
+  },
+  {
+    id: "8465",
+    name: "Chile EEZ",
+    country: "Chile",
+    dataset: "public-eez-areas",
+  },
+  {
+    id: "8492",
+    name: "Indonesia EEZ",
+    country: "Indonesia",
+    dataset: "public-eez-areas",
+  },
+  {
+    id: "555745303",
+    name: "Cocos Island",
+    country: "Costa Rica",
+    dataset: "public-mpa-all",
+  },
+  {
+    id: "555745304",
+    name: "Malpelo MPA",
+    country: "Colombia",
+    dataset: "public-mpa-all",
+  },
 ];
 
 export async function GET(request: NextRequest) {
