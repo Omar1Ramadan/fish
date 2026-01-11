@@ -35,7 +35,6 @@ interface FishingMapProps {
   selectedEEZ?: EEZRegion | null;
   eezBuffer?: number;
   excludedCountries?: string[];
-  onMapReady?: () => void;
   probabilityCloud?: {
     type: "FeatureCollection";
     features: Array<{
@@ -61,6 +60,9 @@ export default function FishingMap({
   endDate,
   selectedEEZ,
   eezBuffer = 0,
+  excludedCountries = [],
+  probabilityCloud,
+  onMapReady,
 }: FishingMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
@@ -69,6 +71,20 @@ export default function FishingMap({
   const [mapError, setMapError] = useState<string | null>(null);
   const [tileUrl, setTileUrl] = useState<string | null>(null);
   const [isLoadingStyle, setIsLoadingStyle] = useState(false);
+  const [mapInstance, setMapInstance] = useState<mapboxgl.Map | null>(null);
+
+  // Orbit animation functions
+  const stopOrbitAnimation = useCallback(() => {
+    if (orbitAnimationRef.current) {
+      cancelAnimationFrame(orbitAnimationRef.current);
+      orbitAnimationRef.current = null;
+    }
+  }, []);
+
+  const startOrbitAnimation = useCallback(() => {
+    // Optional: implement slow orbit around selected region
+    // For now, this is a placeholder
+  }, []);
 
   // Debug logging (no-op in production)
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -513,7 +529,6 @@ export default function FishingMap({
       log("INIT", "✅ Map instance created successfully");
     } catch (error) {
       logError("INIT", "Failed to create map instance:", error);
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- Error handling for external library initialization
       setMapError(`Failed to create map: ${error}`);
       return;
     }
@@ -529,11 +544,8 @@ export default function FishingMap({
     currentMap.on("load", () => {
       log("EVENT", "🎉 MAP LOAD EVENT FIRED - Map is ready!");
       setIsLoaded(true);
-      // Notify parent that map is ready
-      if (onMapReady) {
-        onMapReady();
-      }
       setMapInstance(currentMap);
+      // Notify parent that map is ready
       if (onMapReady) {
         onMapReady(currentMap);
       }

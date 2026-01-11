@@ -80,7 +80,7 @@ export default function Home() {
         <LoadingScreen
           isMapReady={isMapReady}
           onLoadingComplete={handleLoadingComplete}
-          probabilityCloud={probabilityCloud}
+          // probabilityCloud={probabilityCloud}
       />
       )}
 
@@ -159,7 +159,7 @@ export default function Home() {
           startDate={startDate}
           endDate={endDate}
           bufferValue={eezBuffer}
-          onPredictionGenerated={setProbabilityCloud}
+          // onPredictionGenerated={setProbabilityCloud}
         />
       </div>
 
