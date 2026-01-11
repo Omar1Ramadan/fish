@@ -3,6 +3,7 @@
 import { useRef, useEffect, useState, useCallback } from "react";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
+import PredictionOverlay from "./PredictionOverlay";
 
 // Logging utility with timestamps
 const log = (category: string, message: string, data?: unknown) => {
@@ -33,6 +34,15 @@ interface FishingMapProps {
   endDate: string;
   selectedEEZ?: EEZRegion | null;
   eezBuffer?: number;
+  probabilityCloud?: {
+    type: "FeatureCollection";
+    features: Array<{
+      type: "Feature";
+      geometry: { type: "Point"; coordinates: [number, number] };
+      properties: { probability: number };
+    }>;
+  } | null;
+  onMapReady?: (map: mapboxgl.Map) => void;
 }
 
 interface StyleApiResponse {
@@ -49,6 +59,8 @@ export default function FishingMap({
   endDate,
   selectedEEZ,
   eezBuffer = 0,
+  probabilityCloud,
+  onMapReady,
 }: FishingMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
@@ -56,6 +68,7 @@ export default function FishingMap({
   const [mapError, setMapError] = useState<string | null>(null);
   const [tileUrl, setTileUrl] = useState<string | null>(null);
   const [isLoadingStyle, setIsLoadingStyle] = useState(false);
+  const [mapInstance, setMapInstance] = useState<mapboxgl.Map | null>(null);
 
   // Debug logging (no-op in production)
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -492,6 +505,10 @@ export default function FishingMap({
     currentMap.on("load", () => {
       log("EVENT", "🎉 MAP LOAD EVENT FIRED - Map is ready!");
       setIsLoaded(true);
+      setMapInstance(currentMap);
+      if (onMapReady) {
+        onMapReady(currentMap);
+      }
     });
 
     currentMap.on("error", (e) => {
@@ -559,10 +576,10 @@ export default function FishingMap({
         endDate,
         isLoaded,
       });
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- Async fetch for external map data
       fetchStyle();
     }
-  }, [isLoaded, startDate, endDate, fetchStyle]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoaded, startDate, endDate]);
 
   // Update layer when tile URL is set
   useEffect(() => {
@@ -583,6 +600,13 @@ export default function FishingMap({
   return (
     <div className="relative w-full h-full">
       <div ref={mapContainer} className="w-full h-full" />
+      {mapInstance && probabilityCloud && (
+        <PredictionOverlay
+          map={mapInstance}
+          probabilityCloud={probabilityCloud}
+          isVisible={true}
+        />
+      )}
 
       {/* Error display */}
       {mapError && (

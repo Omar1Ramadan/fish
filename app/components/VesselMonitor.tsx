@@ -18,6 +18,11 @@ interface VesselEvent {
   lastLon: number;
   hoursMissing: number;
   riskLevel: "low" | "medium" | "high";
+  prediction?: {
+    predictedPosition: [number, number];
+    uncertaintyNm: number;
+    probabilityCloud: any;
+  };
 }
 
 interface VesselData {
@@ -32,6 +37,7 @@ interface VesselMonitorProps {
   startDate: string;
   endDate: string;
   bufferValue: number;
+  onPredictionGenerated?: (probabilityCloud: any) => void;
 }
 
 export default function VesselMonitor({
@@ -39,11 +45,14 @@ export default function VesselMonitor({
   startDate,
   endDate,
   bufferValue,
+  onPredictionGenerated,
 }: VesselMonitorProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [vesselEvents, setVesselEvents] = useState<VesselEvent[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  const [selectedEvent, setSelectedEvent] = useState<VesselEvent | null>(null);
+  const [isPredicting, setIsPredicting] = useState(false);
 
   const fetchVesselData = useCallback(async () => {
     if (!selectedEEZ) return;
@@ -135,6 +144,69 @@ export default function VesselMonitor({
       setVesselEvents([]);
     }
   }, [selectedEEZ, isExpanded, fetchVesselData]);
+
+  const generatePrediction = async (event: VesselEvent) => {
+    setIsPredicting(true);
+    try {
+      const response = await fetch("/api/predict-path", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          vesselId: event.vesselId,
+          lastPosition: {
+            lat: event.lastLat,
+            lon: event.lastLon,
+          },
+          gapDurationHours: event.hoursMissing,
+          modelType: "baseline",
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to generate prediction");
+      }
+
+      const data = await response.json();
+
+      // Update event with prediction
+      setVesselEvents((prev) =>
+        prev.map((e) =>
+          e.vesselId === event.vesselId
+            ? {
+                ...e,
+                prediction: {
+                  predictedPosition: data.prediction.predictedPosition,
+                  uncertaintyNm: data.prediction.uncertaintyNm,
+                  probabilityCloud: data.probabilityCloud,
+                },
+              }
+            : e
+        )
+      );
+
+      const updatedEvent = {
+        ...event,
+        prediction: {
+          predictedPosition: data.prediction.predictedPosition,
+          uncertaintyNm: data.prediction.uncertaintyNm,
+          probabilityCloud: data.probabilityCloud,
+        },
+      };
+      
+      setSelectedEvent(updatedEvent);
+      
+      // Notify parent component to update probability cloud on map
+      if (onPredictionGenerated && data.probabilityCloud) {
+        onPredictionGenerated(data.probabilityCloud);
+      }
+    } catch (error) {
+      console.error("Failed to generate prediction:", error);
+    } finally {
+      setIsPredicting(false);
+    }
+  };
 
   const getRiskColor = (risk: string) => {
     switch (risk) {
@@ -242,6 +314,23 @@ export default function VesselMonitor({
                         {event.lastLon.toFixed(2)}°
                       </div>
                     </div>
+                    <div className="mt-2 pt-2 border-t border-slate-700/50">
+                      <button
+                        onClick={() => generatePrediction(event)}
+                        disabled={isPredicting}
+                        className="w-full px-2 py-1 bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/50 rounded text-[10px] font-mono text-cyan-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {isPredicting ? "Predicting..." : "🔮 Predict Path"}
+                      </button>
+                      {event.prediction && (
+                        <div className="mt-2 text-[10px] text-cyan-300">
+                          Predicted: {event.prediction.predictedPosition[0].toFixed(2)}°,{" "}
+                          {event.prediction.predictedPosition[1].toFixed(2)}°
+                          <br />
+                          Uncertainty: ±{event.prediction.uncertaintyNm.toFixed(1)} nm
+                        </div>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -255,7 +344,7 @@ export default function VesselMonitor({
 
           {/* Info */}
           <div className="text-xs text-slate-500 font-mono pt-2 border-t border-slate-800">
-            Detects vessels that go dark near protected zones
+            Detects vessels that go dark near protected zones. Click "Predict Path" to generate probability cloud.
           </div>
         </div>
       )}

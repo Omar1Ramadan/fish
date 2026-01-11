@@ -4,6 +4,7 @@ import { useState, useCallback } from "react";
 import dynamic from "next/dynamic";
 import TimelineSlider from "./components/TimelineSlider";
 import EEZSelector from "./components/EEZSelector";
+import VesselMonitor from "./components/VesselMonitor";
 
 // Dynamic import to avoid SSR issues with Mapbox
 const FishingMap = dynamic(() => import("./components/FishingMap"), {
@@ -55,6 +56,7 @@ export default function Home() {
         endDate={endDate}
         selectedEEZ={selectedEEZ}
         eezBuffer={eezBuffer}
+        probabilityCloud={probabilityCloud}
       />
 
       {/* Header overlay */}
@@ -134,6 +136,17 @@ export default function Home() {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Vessel Monitor - bottom left */}
+      <div className="absolute bottom-4 left-4 pointer-events-auto">
+        <VesselMonitor
+          selectedEEZ={selectedEEZ}
+          startDate={startDate}
+          endDate={endDate}
+          bufferValue={eezBuffer}
+          onPredictionGenerated={setProbabilityCloud}
+        />
       </div>
 
       {/* Timeline Slider - fixed at bottom */}
