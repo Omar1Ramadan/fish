@@ -71,7 +71,18 @@ export default function Home() {
         endDate={endDate}
         selectedEEZ={selectedEEZ}
         eezBuffer={eezBuffer}
+        excludedCountries={excludedCountries}
+        onMapReady={handleMapReady}
       />
+
+      {/* Loading Screen */}
+      {showLoadingScreen && (
+        <LoadingScreen
+          isMapReady={isMapReady}
+          onLoadingComplete={handleLoadingComplete}
+          probabilityCloud={probabilityCloud}
+      />
+      )}
 
       {/* Header overlay */}
       <div className="absolute top-0 left-0 right-0 p-4 pointer-events-none">
