@@ -34,6 +34,7 @@ interface FishingMapProps {
   selectedEEZ?: EEZRegion | null;
   eezBuffer?: number;
   excludedCountries?: string[];
+  onMapReady?: () => void;
 }
 
 interface StyleApiResponse {
@@ -51,13 +52,68 @@ export default function FishingMap({
   selectedEEZ,
   eezBuffer = 0,
   excludedCountries = [],
+  onMapReady,
 }: FishingMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
+  const orbitAnimationRef = useRef<number | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
   const [tileUrl, setTileUrl] = useState<string | null>(null);
   const [isLoadingStyle, setIsLoadingStyle] = useState(false);
+
+  // Stop drone orbit animation
+  const stopOrbitAnimation = useCallback(() => {
+    if (orbitAnimationRef.current !== null) {
+      cancelAnimationFrame(orbitAnimationRef.current);
+      orbitAnimationRef.current = null;
+      log("ORBIT", "🛑 Stopped orbit animation");
+    }
+  }, []);
+
+  // Start cinematic drone orbit animation
+  const startOrbitAnimation = useCallback(() => {
+    if (!map.current) return;
+
+    stopOrbitAnimation();
+
+    const currentMap = map.current;
+    let bearing = currentMap.getBearing();
+    const rotationSpeed = 0.04; // Degrees per frame - slow, cinematic
+
+    // Small delay to let the fly-in settle, then start rotating
+    setTimeout(() => {
+      const animate = () => {
+        if (!map.current) return;
+
+        bearing += rotationSpeed;
+        if (bearing >= 360) bearing -= 360;
+
+        map.current.easeTo({
+          bearing,
+          duration: 0,
+          easing: (t) => t,
+        });
+
+        orbitAnimationRef.current = requestAnimationFrame(animate);
+      };
+
+      log("ORBIT", "🚁 Starting orbit animation");
+      orbitAnimationRef.current = requestAnimationFrame(animate);
+    }, 500); // Brief pause after fly-in settles
+
+    // Stop animation on user interaction
+    const stopOnInteraction = () => {
+      stopOrbitAnimation();
+      currentMap.off("mousedown", stopOnInteraction);
+      currentMap.off("touchstart", stopOnInteraction);
+      currentMap.off("wheel", stopOnInteraction);
+    };
+
+    currentMap.on("mousedown", stopOnInteraction);
+    currentMap.on("touchstart", stopOnInteraction);
+    currentMap.on("wheel", stopOnInteraction);
+  }, [stopOrbitAnimation]);
 
   // Debug logging (no-op in production)
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -237,6 +293,9 @@ export default function FishingMap({
         return;
       }
 
+      // Stop any existing orbit animation when changing EEZ
+      stopOrbitAnimation();
+
       const sourceId = "eez-boundary";
       const layerId = "eez-boundary-layer";
       const fillLayerId = `${layerId}-fill`;
@@ -383,10 +442,19 @@ export default function FishingMap({
         );
 
         if (!bounds.isEmpty()) {
+          // Fly to bounds with cinematic camera
           map.current.fitBounds(bounds, {
-            padding: { top: 50, right: 50, bottom: 150, left: 50 }, // Extra bottom padding for timeline bar
+            padding: { top: 100, right: 100, bottom: 200, left: 100 }, // Extra padding for 3D view
             maxZoom: 5, // Don't zoom in too far when fitting to EEZ
+            pitch: 50, // Tilt camera for 3D effect
+            bearing: 0,
+            duration: 1800, // Faster fly-in
           });
+
+          // Start orbit after fly-in completes
+          setTimeout(() => {
+            startOrbitAnimation();
+          }, 1900);
         }
 
         log("EEZ", "✅ Boundary displayed", {
@@ -401,7 +469,7 @@ export default function FishingMap({
         );
       }
     },
-    [isLoaded, addDebug]
+    [isLoaded, addDebug, startOrbitAnimation, stopOrbitAnimation]
   );
 
   // Initialize map
@@ -506,6 +574,10 @@ export default function FishingMap({
     currentMap.on("load", () => {
       log("EVENT", "🎉 MAP LOAD EVENT FIRED - Map is ready!");
       setIsLoaded(true);
+      // Notify parent that map is ready
+      if (onMapReady) {
+        onMapReady();
+      }
     });
 
     currentMap.on("error", (e) => {
@@ -560,9 +632,15 @@ export default function FishingMap({
 
     return () => {
       log("CLEANUP", "🧹 Cleaning up map instance");
+      // Stop orbit animation
+      if (orbitAnimationRef.current !== null) {
+        cancelAnimationFrame(orbitAnimationRef.current);
+        orbitAnimationRef.current = null;
+      }
       currentMap.remove();
       map.current = null; // Clear ref so next mount can reinitialize
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Only run on mount, onMapReady is stable via useCallback
   }, []);
 
   // Fetch style and update layer when map loads or dates change

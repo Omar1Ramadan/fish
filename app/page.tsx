@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import TimelineSlider from "./components/TimelineSlider";
 import EEZSelector from "./components/EEZSelector";
 import CountryFilter from "./components/CountryFilter";
+import LoadingScreen from "./components/LoadingScreen";
 
 // Dynamic import to avoid SSR issues with Mapbox
 const FishingMap = dynamic(() => import("./components/FishingMap"), {
@@ -40,13 +41,25 @@ export default function Home() {
   // Default dates: Jul 1, 2025 to Sep 30, 2025 (~3 month window)
   const [startDate, setStartDate] = useState("2025-07-01");
   const [endDate, setEndDate] = useState("2025-09-30");
-  const [selectedEEZ, setSelectedEEZ] = useState<EEZRegion | null>(GALAPAGOS_EEZ);
+  const [selectedEEZ, setSelectedEEZ] = useState<EEZRegion | null>(null); // Start with no EEZ selected
   const [eezBuffer, setEezBuffer] = useState(0);
   const [excludedCountries, setExcludedCountries] = useState<string[]>([]);
+  const [isMapReady, setIsMapReady] = useState(false);
+  const [showLoadingScreen, setShowLoadingScreen] = useState(true);
 
   const handleDateChange = useCallback((start: string, end: string) => {
     setStartDate(start);
     setEndDate(end);
+  }, []);
+
+  const handleMapReady = useCallback(() => {
+    setIsMapReady(true);
+  }, []);
+
+  const handleLoadingComplete = useCallback(() => {
+    setShowLoadingScreen(false);
+    // Select Galapagos immediately after loading to show the zoom effect
+    setSelectedEEZ(GALAPAGOS_EEZ);
   }, []);
 
   return (
@@ -58,7 +71,16 @@ export default function Home() {
         selectedEEZ={selectedEEZ}
         eezBuffer={eezBuffer}
         excludedCountries={excludedCountries}
+        onMapReady={handleMapReady}
       />
+
+      {/* Loading Screen */}
+      {showLoadingScreen && (
+        <LoadingScreen
+          isMapReady={isMapReady}
+          onLoadingComplete={handleLoadingComplete}
+        />
+      )}
 
       {/* Header overlay */}
       <div className="absolute top-0 left-0 right-0 p-4 pointer-events-none">
