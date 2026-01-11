@@ -9,7 +9,7 @@ interface EEZRegion {
   dataset: string;
 }
 
-interface Vessel {
+export interface Vessel {
   vesselId: string;
   mmsi: string;
   name: string;

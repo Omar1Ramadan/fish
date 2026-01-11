@@ -6,7 +6,8 @@ import TimelineSlider from "./components/TimelineSlider";
 import EEZSelector from "./components/EEZSelector";
 import CountryFilter from "./components/CountryFilter";
 import LoadingScreen from "./components/LoadingScreen";
-import VesselList, { PredictionData } from "./components/VesselList";
+import VesselList, { Vessel } from "./components/VesselList";
+import { PredictionData } from "./components/PredictionOverlay";
 import type { SARLayerOptions } from "./components/FishingMap";
 
 // Dynamic import to avoid SSR issues with Mapbox
@@ -49,6 +50,13 @@ export default function Home() {
   const [excludedCountries, setExcludedCountries] = useState<string[]>([]);
   const [isMapReady, setIsMapReady] = useState(false);
   const [showLoadingScreen, setShowLoadingScreen] = useState(true);
+  const [predictionResult, setPredictionResult] = useState<PredictionData | null>(null);
+  const [selectedVessel, setSelectedVessel] = useState<Vessel | null>(null);
+  const [sarLayer, setSarLayer] = useState<SARLayerOptions>({
+    enabled: false,
+    matched: "all",
+    opacity: 0.9,
+  });
 
   const handleDateChange = useCallback((start: string, end: string) => {
     setStartDate(start);
@@ -241,7 +249,6 @@ export default function Home() {
           bufferValue={eezBuffer}
           selectedVessel={selectedVessel}
           onVesselSelect={setSelectedVessel}
-          onPredictionGenerated={setPredictionResult}
         />
       </div>
 
