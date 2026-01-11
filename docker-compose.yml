@@ -1,0 +1,35 @@
+# Docker Compose for local development
+# Run: docker-compose up
+
+version: '3.8'
+
+services:
+  # Python ML Prediction Server
+  ml-server:
+    build:
+      context: ./ml
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Next.js Frontend (optional - can also run with npm run dev)
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - ML_SERVER_URL=http://ml-server:8000
+      - FISH_API=${FISH_API}
+      - NEXT_PUBLIC_MAPBOX_TOKEN=${NEXT_PUBLIC_MAPBOX_TOKEN}
+    depends_on:
+      ml-server:
+        condition: service_healthy

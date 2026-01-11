@@ -42,7 +42,7 @@ lstm_model = None
 normalizer: Optional[TrajectoryNormalizerV3] = None
 baseline_model = DeadReckoningBaseline()
 
-SEQUENCE_LENGTH = 10
+SEQUENCE_LENGTH = 20  # Must match the trained model's input shape
 NUM_FEATURES = 5  # lat_rel, lon_rel, speed_norm, sin, cos (NO gap!)
 
 
@@ -59,6 +59,7 @@ class PredictionRequest(BaseModel):
     gap_duration_hours: float
     sequence: Optional[List[PositionPoint]] = None
     model_type: str = "lstm"
+    aggression_factor: float = 1.0  # Multiplier for prediction distance (0.25-10.0)
 
 
 class PredictionResponse(BaseModel):
@@ -184,11 +185,16 @@ async def health():
 @app.post("/predict", response_model=PredictionResponse)
 async def predict_path(request: PredictionRequest):
     """Predict vessel path after AIS gap"""
+    # Clamp aggression factor to valid range (0.25x to 10x)
+    aggression = max(0.25, min(10.0, request.aggression_factor))
+    
     print(f"\n{'='*60}")
     print(f"🔮 Prediction: {request.vessel_id}")
     print(f"   Position: ({request.last_position.lat:.4f}, {request.last_position.lon:.4f})")
     print(f"   Speed: {request.last_position.speed} kn, Course: {request.last_position.course}°")
     print(f"   Gap: {request.gap_duration_hours} hours")
+    aggression_icon = '🎯' if aggression < 0.75 else '⚖️' if aggression < 1.5 else '🚀' if aggression < 3 else '🔥' if aggression < 6 else '💥'
+    print(f"   Aggression: {aggression}x {aggression_icon}")
     
     ref_lat = request.last_position.lat
     ref_lon = request.last_position.lon
@@ -213,17 +219,23 @@ async def predict_path(request: PredictionRequest):
             
             # Scale by gap duration → total displacement
             displacement = velocity * gap_hours
-            print(f"   Displacement: {displacement[0]:.4f}° lat, {displacement[1]:.4f}° lon")
+            print(f"   Displacement (raw): {displacement[0]:.4f}° lat, {displacement[1]:.4f}° lon")
+            
+            # Apply aggression factor to extend the prediction range
+            displacement = displacement * aggression
+            print(f"   Displacement (×{aggression}): {displacement[0]:.4f}° lat, {displacement[1]:.4f}° lon")
             
             # Final position
             pred_lat = float(ref_lat + displacement[0])
             pred_lon = float(ref_lon + displacement[1])
             
-            # Uncertainty scales with sqrt(time)
+            # Uncertainty scales with sqrt(time) and aggression factor
             base_unc = 0.05  # degrees
             time_factor = np.sqrt(gap_hours)
-            unc_lat = float(base_unc * time_factor)
-            unc_lon = float(base_unc * time_factor / np.cos(np.radians(ref_lat)))
+            # More aggressive = more uncertainty
+            aggression_unc_factor = np.sqrt(aggression)
+            unc_lat = float(base_unc * time_factor * aggression_unc_factor)
+            unc_lon = float(base_unc * time_factor * aggression_unc_factor / np.cos(np.radians(ref_lat)))
             
             method = "lstm_v3_velocity"
             confidence = 0.85
@@ -235,25 +247,29 @@ async def predict_path(request: PredictionRequest):
             use_lstm = False
     
     if not use_lstm:
-        print("   📐 Using baseline (dead reckoning)")
+        print(f"   📐 Using baseline (dead reckoning) with aggression={aggression}x")
+        # Scale the time gap by aggression to predict further distances
+        effective_gap_hours = gap_hours * aggression
         result = baseline_model.predict(
             last_position=(ref_lat, ref_lon),
             last_speed=request.last_position.speed or 5.0,
             last_course=request.last_position.course or 0.0,
-            time_gap_hours=gap_hours,
+            time_gap_hours=effective_gap_hours,
         )
         pred_lat = float(result['predicted_position'][0])
         pred_lon = float(result['predicted_position'][1])
-        unc_lat = float(result['uncertainty_degrees'][0])
-        unc_lon = float(result['uncertainty_degrees'][1])
+        # Scale uncertainty by aggression
+        aggression_unc_factor = np.sqrt(aggression)
+        unc_lat = float(result['uncertainty_degrees'][0] * aggression_unc_factor)
+        unc_lon = float(result['uncertainty_degrees'][1] * aggression_unc_factor)
         method = "dead_reckoning"
-        confidence = 0.5
+        confidence = max(0.2, 0.5 / aggression)  # Lower confidence for aggressive predictions
     
     uncertainty_nm = float((unc_lat + unc_lon) / 2 * 60)
     cloud = generate_probability_cloud(pred_lat, pred_lon, unc_lat, unc_lon)
     
     print(f"   ✅ Prediction: ({pred_lat:.4f}, {pred_lon:.4f}) ±{uncertainty_nm:.1f}nm")
-    print(f"   Method: {method}")
+    print(f"   Method: {method} | Aggression: {aggression}x")
     
     return PredictionResponse(
         vessel_id=request.vessel_id,

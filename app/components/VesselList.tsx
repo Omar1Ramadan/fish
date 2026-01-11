@@ -34,6 +34,7 @@ interface VesselListProps {
   bufferValue?: number;
   onVesselSelect?: (vessel: Vessel | null) => void;
   selectedVessel?: Vessel | null;
+  hasPredictionActive?: boolean; // Show indicator when prediction is displayed for selected vessel
 }
 
 // Country flag emoji helper
@@ -128,6 +129,7 @@ export default function VesselList({
   bufferValue = 0,
   onVesselSelect,
   selectedVessel,
+  hasPredictionActive = false,
 }: VesselListProps) {
   const [vessels, setVessels] = useState<Vessel[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -564,7 +566,9 @@ export default function VesselList({
                   onClick={() => handleVesselClick(vessel)}
                   className={`w-full px-4 py-3 flex items-center gap-3 border-b border-slate-800/50 last:border-b-0 transition-colors text-left ${
                     selectedVessel?.vesselId === vessel.vesselId
-                      ? "bg-cyan-950/40 border-l-2 border-l-cyan-400"
+                      ? hasPredictionActive
+                        ? "bg-orange-950/40 border-l-2 border-l-orange-400"
+                        : "bg-cyan-950/40 border-l-2 border-l-cyan-400"
                       : vessel.hasGaps
                       ? "bg-red-950/20 hover:bg-red-950/30"
                       : "hover:bg-slate-900/50"
@@ -581,8 +585,14 @@ export default function VesselList({
                       <p className="font-mono text-sm text-white truncate">
                         {vessel.name}
                       </p>
+                      {/* Prediction active indicator */}
+                      {selectedVessel?.vesselId === vessel.vesselId && hasPredictionActive && (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-orange-500/20 border border-orange-500/30 rounded text-[9px] font-mono text-orange-400">
+                          🔮 Predicting
+                        </span>
+                      )}
                       {/* Gap indicator */}
-                      {vessel.hasGaps && (
+                      {vessel.hasGaps && !(selectedVessel?.vesselId === vessel.vesselId && hasPredictionActive) && (
                         <span
                           className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-red-500/20 border border-red-500/30 rounded text-[9px] font-mono text-red-400"
                           title={`${vessel.gapCount} AIS gap${

@@ -1,0 +1,19 @@
+{
+  "version": 3,
+  "stats": {
+    "velocity_lat_mean": -0.00041179555208269023,
+    "velocity_lat_std": 0.05156810298242665,
+    "velocity_lon_mean": 0.0005739609047797657,
+    "velocity_lon_std": 0.08784235278651158,
+    "lat_mean": -0.7525389194488525,
+    "lat_std": 0.5060470104217529,
+    "lon_mean": -90.36050415039062,
+    "lon_std": 0.8293590545654297,
+    "speed_mean": 3.5630218982696533,
+    "speed_std": 6.377311706542969
+  },
+  "coord_scale": 1.0,
+  "max_speed": 30.0,
+  "velocity_scale": 0.23100000041217086,
+  "fitted": true
+}

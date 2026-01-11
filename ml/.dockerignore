@@ -1,0 +1,25 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+
+# Data files (not needed for inference)
+data/raw/
+data/gaps/
+data/preprocessed/
+
+# Development
+.git
+.gitignore
+*.md
+.env*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo

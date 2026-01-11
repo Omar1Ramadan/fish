@@ -1,0 +1,35 @@
+# Render Blueprint - Deploy both services
+# https://render.com/docs/blueprint-spec
+
+services:
+  # ML Prediction Server (Python)
+  - type: web
+    name: fishy-ml-server
+    runtime: docker
+    dockerfilePath: ./ml/Dockerfile
+    dockerContext: ./ml
+    region: oregon
+    plan: starter
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: 8000
+
+  # Next.js Frontend
+  - type: web
+    name: fishy-frontend
+    runtime: node
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    region: oregon
+    plan: starter
+    envVars:
+      - key: ML_SERVER_URL
+        fromService:
+          name: fishy-ml-server
+          type: web
+          property: host
+      - key: FISH_API
+        sync: false
+      - key: NEXT_PUBLIC_MAPBOX_TOKEN
+        sync: false

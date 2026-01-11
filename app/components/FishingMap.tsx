@@ -44,6 +44,13 @@ export interface SARLayerOptions {
   opacity?: number;
 }
 
+// Gap position for visualization
+interface ActiveGap {
+  id: string;
+  position: { lat: number; lon: number };
+  durationHours?: number;
+}
+
 interface FishingMapProps {
   startDate: string;
   endDate: string;
@@ -54,6 +61,7 @@ interface FishingMapProps {
   onMapReady?: (map: mapboxgl.Map) => void;
   selectedVessel?: SelectedVessel | null;
   sarLayer?: SARLayerOptions;
+  activeGap?: ActiveGap | null; // Gap being predicted
 }
 
 interface StyleApiResponse {
@@ -75,6 +83,7 @@ export default function FishingMap({
   onMapReady,
   selectedVessel,
   sarLayer = { enabled: false, matched: "all", opacity: 0.9 },
+  activeGap,
 }: FishingMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
@@ -93,6 +102,7 @@ export default function FishingMap({
     startTime: string;
     position: { lat: number; lon: number };
   }> | null>(null);
+  const gapMarkerRef = useRef<mapboxgl.Marker | null>(null);
 
   // Orbit animation functions
   const stopOrbitAnimation = useCallback(() => {
@@ -773,6 +783,95 @@ export default function FishingMap({
     [isLoaded]
   );
 
+  // Update gap marker when activeGap changes
+  const updateGapMarker = useCallback(
+    (gap: ActiveGap | null) => {
+      log("GAP", "🔄 updateGapMarker called", {
+        hasMap: !!map.current,
+        gapId: gap?.id,
+        position: gap?.position,
+      });
+
+      // Remove existing marker
+      if (gapMarkerRef.current) {
+        gapMarkerRef.current.remove();
+        gapMarkerRef.current = null;
+      }
+
+      if (!map.current || !gap) {
+        log("GAP", "✅ Gap marker removed (no gap or map)");
+        return;
+      }
+
+      // Create gap marker element with pulsing animation
+      const markerEl = document.createElement("div");
+      markerEl.innerHTML = `
+        <div style="position: relative; cursor: pointer;">
+          <div style="
+            width: 24px; 
+            height: 24px; 
+            background: #ef4444; 
+            border: 3px solid white; 
+            border-radius: 50%; 
+            box-shadow: 0 0 15px rgba(239, 68, 68, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          ">
+            <div style="
+              width: 8px;
+              height: 8px;
+              background: white;
+              border-radius: 50%;
+            "></div>
+          </div>
+          <div style="
+            position: absolute; 
+            top: -6px; 
+            left: -6px; 
+            width: 36px; 
+            height: 36px; 
+            border: 2px solid #ef4444; 
+            border-radius: 50%; 
+            animation: gapPulse 2s infinite;
+          "></div>
+          <div style="
+            position: absolute;
+            top: -35px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #ef4444;
+            color: white;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-family: monospace;
+            white-space: nowrap;
+            font-weight: bold;
+          ">LAST SEEN${gap.durationHours ? ` (${Math.round(gap.durationHours)}h ago)` : ""}</div>
+        </div>
+        <style>
+          @keyframes gapPulse {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.5); opacity: 0.5; }
+            100% { transform: scale(2); opacity: 0; }
+          }
+        </style>
+      `;
+
+      // Add the marker
+      gapMarkerRef.current = new mapboxgl.Marker({ element: markerEl })
+        .setLngLat([gap.position.lon, gap.position.lat])
+        .addTo(map.current);
+
+      log("GAP", "✅ Gap marker added", {
+        lat: gap.position.lat,
+        lon: gap.position.lon,
+      });
+    },
+    []
+  );
+
   // Fetch vessel events when selected vessel changes
   const fetchVesselTrack = useCallback(
     async (vessel: SelectedVessel | null) => {
@@ -980,6 +1079,11 @@ export default function FishingMap({
         cancelAnimationFrame(orbitAnimationRef.current);
         orbitAnimationRef.current = null;
       }
+      // Remove gap marker
+      if (gapMarkerRef.current) {
+        gapMarkerRef.current.remove();
+        gapMarkerRef.current = null;
+      }
       currentMap.remove();
       map.current = null; // Clear ref so next mount can reinitialize
     };
@@ -1050,6 +1154,14 @@ export default function FishingMap({
       updateVesselTrackLayer(vesselTrack);
     }
   }, [isLoaded, vesselTrack, updateVesselTrackLayer]);
+
+  // Update gap marker when activeGap changes
+  useEffect(() => {
+    if (isLoaded) {
+      log("EFFECT", "🔴 Active gap changed, updating marker");
+      updateGapMarker(activeGap || null);
+    }
+  }, [isLoaded, activeGap, updateGapMarker]);
 
   // Fetch SAR style when enabled or dates change
   useEffect(() => {

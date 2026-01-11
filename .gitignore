@@ -46,9 +46,9 @@ ml/data/gaps/
 ml/data/preprocessed/
 ml/data/normalized*/
 
-# ML models (can be retrained)
-ml/models/*.h5
-ml/models/*.json
+# ML models - KEEP these for deployment!
+# ml/models/*.h5  # Uncomment to exclude if too large
+# ml/models/*.json
 !ml/models/__init__.py
 
 # Python

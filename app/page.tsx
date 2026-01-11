@@ -7,6 +7,7 @@ import EEZSelector from "./components/EEZSelector";
 import CountryFilter from "./components/CountryFilter";
 import LoadingScreen from "./components/LoadingScreen";
 import VesselList, { Vessel } from "./components/VesselList";
+import VesselPanel from "./components/VesselPanel";
 import { PredictionData } from "./components/PredictionOverlay";
 import type { SARLayerOptions } from "./components/FishingMap";
 
@@ -68,6 +69,14 @@ export default function Home() {
     opacity: 0.9,
   });
 
+  // Prediction state
+  const [activePredictionGapId, setActivePredictionGapId] = useState<string | null>(null);
+  const [activeGap, setActiveGap] = useState<{
+    id: string;
+    position: { lat: number; lon: number };
+    durationHours?: number;
+  } | null>(null);
+
   const handleDateChange = useCallback((start: string, end: string) => {
     setStartDate(start);
     setEndDate(end);
@@ -83,6 +92,36 @@ export default function Home() {
     setSelectedEEZ(GALAPAGOS_EEZ);
   }, []);
 
+  // Handle prediction generation from VesselPanel
+  const handlePredictionGenerated = useCallback(
+    (prediction: PredictionData | null, gapId: string | null) => {
+      setPredictionResult(prediction);
+      setActivePredictionGapId(gapId);
+      
+      // Set the active gap for the marker
+      if (prediction && gapId) {
+        setActiveGap({
+          id: gapId,
+          position: {
+            lat: prediction.startPosition[0],
+            lon: prediction.startPosition[1],
+          },
+        });
+      } else {
+        setActiveGap(null);
+      }
+    },
+    []
+  );
+
+  // Handle vessel panel close
+  const handleVesselPanelClose = useCallback(() => {
+    setSelectedVessel(null);
+    setPredictionResult(null);
+    setActivePredictionGapId(null);
+    setActiveGap(null);
+  }, []);
+
   return (
     <div className="relative w-screen h-screen bg-slate-950 overflow-hidden">
       {/* Map takes full viewport */}
@@ -96,6 +135,7 @@ export default function Home() {
         onMapReady={handleMapReady}
         selectedVessel={selectedVessel}
         sarLayer={sarLayer}
+        activeGap={activeGap}
       />
 
       {/* Loading Screen */}
@@ -234,9 +274,24 @@ export default function Home() {
             bufferValue={eezBuffer}
             selectedVessel={selectedVessel}
             onVesselSelect={setSelectedVessel}
+            hasPredictionActive={!!predictionResult}
           />
         </div>
       </div>
+
+      {/* Vessel Panel - right side when vessel selected */}
+      {selectedVessel && (
+        <div className="absolute right-4 top-[180px] pointer-events-auto w-96 z-20">
+          <VesselPanel
+            vessel={selectedVessel as Vessel}
+            startDate={startDate}
+            endDate={endDate}
+            onClose={handleVesselPanelClose}
+            onPredictionGenerated={handlePredictionGenerated}
+            activePredictionGapId={activePredictionGapId}
+          />
+        </div>
+      )}
 
       {/* Timeline Slider - fixed at bottom */}
       <div className="absolute bottom-0 left-0 right-0 pointer-events-auto">
