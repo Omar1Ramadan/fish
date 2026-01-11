@@ -1,0 +1,23 @@
+# Python dependencies for Dark Zone Predictor ML Pipeline
+
+# Core data processing
+numpy>=1.24.0
+pandas>=2.0.0
+
+# Machine Learning
+tensorflow>=2.13.0  # Optional - only needed for LSTM model
+# Alternative: use PyTorch if preferred
+# torch>=2.0.0
+
+# API requests
+requests>=2.31.0
+
+# Date/time utilities
+python-dateutil>=2.8.0
+
+# Environment variable loading (optional but recommended)
+python-dotenv>=1.0.0
+
+# Optional: for advanced features
+# scikit-learn>=1.3.0  # For additional ML utilities
+# scipy>=1.11.0  # For scientific computing
