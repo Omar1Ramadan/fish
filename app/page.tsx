@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import dynamic from "next/dynamic";
-import TimeControls from "./components/TimeControls";
+import TimelineSlider from "./components/TimelineSlider";
 import EEZSelector from "./components/EEZSelector";
 import VesselMonitor from "./components/VesselMonitor";
 
@@ -21,16 +21,6 @@ const FishingMap = dynamic(() => import("./components/FishingMap"), {
   ),
 });
 
-// Keeping for potential future use
-// function formatDate(date: Date): string {
-//   return date.toISOString().split("T")[0];
-// }
-// function getDateFromDaysAgo(days: number): string {
-//   const date = new Date();
-//   date.setDate(date.getDate() - days);
-//   return formatDate(date);
-// }
-
 interface EEZRegion {
   id: string;
   name: string;
@@ -39,17 +29,16 @@ interface EEZRegion {
 }
 
 export default function Home() {
-  // Use a single month of 2024 data - full year saturates colors
-  // GFW data has ~96hr delay so recent dates may fail
-  const [startDate, setStartDate] = useState("2024-03-01");
-  const [endDate, setEndDate] = useState("2024-03-31");
+  // Default dates: Jul 1, 2025 to Sep 30, 2025 (~3 month window)
+  const [startDate, setStartDate] = useState("2025-07-01");
+  const [endDate, setEndDate] = useState("2025-09-30");
   const [selectedEEZ, setSelectedEEZ] = useState<EEZRegion | null>(null);
   const [eezBuffer, setEezBuffer] = useState(0);
 
-  const handleDateChange = (start: string, end: string) => {
+  const handleDateChange = useCallback((start: string, end: string) => {
     setStartDate(start);
     setEndDate(end);
-  };
+  }, []);
 
   return (
     <div className="relative w-screen h-screen bg-slate-950 overflow-hidden">
@@ -83,15 +72,6 @@ export default function Home() {
               </div>
             </div>
           </div>
-
-          {/* Time Controls */}
-          <div className="pointer-events-auto w-72">
-            <TimeControls
-              startDate={startDate}
-              endDate={endDate}
-              onDateChange={handleDateChange}
-            />
-          </div>
         </div>
       </div>
 
@@ -113,14 +93,14 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Legend */}
-      <div className="absolute bottom-4 right-4 pointer-events-auto">
+      {/* Legend - positioned above the timeline */}
+      <div className="absolute bottom-36 right-4 pointer-events-auto">
         <div className="bg-slate-950/90 backdrop-blur-md border border-cyan-900/30 rounded-lg px-4 py-3 shadow-2xl shadow-cyan-950/20">
           <div className="font-mono text-xs text-slate-500 uppercase mb-2">
             Fishing Intensity
           </div>
           <div className="flex items-center gap-2">
-            <div className="h-2 w-32 rounded-full bg-linear-to-r from-transparent via-orange-500 to-red-500" />
+            <div className="h-2 w-32 rounded-full bg-linear-to-r from-transparent via-emerald-400 to-cyan-300" />
           </div>
           <div className="flex justify-between mt-1">
             <span className="font-mono text-[10px] text-slate-600">Low</span>
@@ -153,6 +133,15 @@ export default function Home() {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Timeline Slider - fixed at bottom */}
+      <div className="absolute bottom-0 left-0 right-0 pointer-events-auto">
+        <TimelineSlider
+          startDate={startDate}
+          endDate={endDate}
+          onDateChange={handleDateChange}
+        />
       </div>
     </div>
   );

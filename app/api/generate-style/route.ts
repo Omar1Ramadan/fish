@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const startDate = searchParams.get("start") || "2024-01-01";
   const endDate = searchParams.get("end") || "2024-03-31";
-  const color = searchParams.get("color") || "%23FF6B35"; // Orange color URL-encoded
+  const color = searchParams.get("color") || "%2303fcbe"; // Bright cyan/turquoise for visibility
   const interval = searchParams.get("interval") || "DAY";
 
   log("📍 Request params:", { startDate, endDate, color, interval });

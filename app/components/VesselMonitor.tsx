@@ -1,6 +1,6 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from "react";
 
 interface EEZRegion {
   id: string;
@@ -17,7 +17,14 @@ interface VesselEvent {
   lastLat: number;
   lastLon: number;
   hoursMissing: number;
-  riskLevel: 'low' | 'medium' | 'high';
+  riskLevel: "low" | "medium" | "high";
+}
+
+interface VesselData {
+  vesselId?: string;
+  entryTimestamp?: string;
+  flag?: string;
+  hours?: number;
 }
 
 interface VesselMonitorProps {
@@ -38,74 +45,73 @@ export default function VesselMonitor({
   const [isLoading, setIsLoading] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
 
-  useEffect(() => {
-    if (selectedEEZ && isExpanded) {
-      fetchVesselData();
-    } else {
-      setVesselEvents([]);
-    }
-  }, [selectedEEZ, startDate, endDate, bufferValue, isExpanded]);
-
-  const fetchVesselData = async () => {
+  const fetchVesselData = useCallback(async () => {
     if (!selectedEEZ) return;
 
     setIsLoading(true);
     try {
       // Fetch vessel presence data for the EEZ region
-      const response = await fetch('/api/eez-report', {
-        method: 'POST',
+      const response = await fetch("/api/eez-report", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           regionId: selectedEEZ.id,
           regionDataset: selectedEEZ.dataset,
           startDate,
           endDate,
-          dataset: 'public-global-presence:latest',
-          format: 'JSON',
-          temporalResolution: 'DAILY',
-          groupBy: 'VESSEL_ID',
+          dataset: "public-global-presence:latest",
+          format: "JSON",
+          temporalResolution: "DAILY",
+          groupBy: "VESSEL_ID",
           spatialAggregation: true,
-          spatialResolution: 'LOW',
+          spatialResolution: "LOW",
           bufferValue: bufferValue > 0 ? bufferValue : undefined,
-          bufferUnit: bufferValue > 0 ? 'NAUTICALMILES' : undefined,
+          bufferUnit: bufferValue > 0 ? "NAUTICALMILES" : undefined,
         }),
       });
 
       if (!response.ok) {
-        throw new Error('Failed to fetch vessel data');
+        throw new Error("Failed to fetch vessel data");
       }
 
       const data = await response.json();
-      
+
       // Process the data to identify potential dark zone events
       // This is a simplified version - in production, you'd analyze AIS gaps
       const events: VesselEvent[] = [];
-      
+
       if (data.entries && data.entries.length > 0) {
         const datasetKey = Object.keys(data.entries[0])[0];
         const vessels = data.entries[0][datasetKey] || [];
-        
+
         // For each vessel, check if there are gaps in presence
         // This is a placeholder - real implementation would track AIS off events
-        vessels.forEach((vessel: any) => {
+        vessels.forEach((vessel: VesselData) => {
           if (vessel.vesselId && vessel.entryTimestamp) {
             const lastSeen = new Date(vessel.entryTimestamp);
             const now = new Date();
-            const hoursMissing = (now.getTime() - lastSeen.getTime()) / (1000 * 60 * 60);
-            
+            const hoursMissing =
+              (now.getTime() - lastSeen.getTime()) / (1000 * 60 * 60);
+
             // Flag vessels that haven't been seen in the last 24 hours as potential dark zones
-            if (hoursMissing > 24 && hoursMissing < 168) { // 1-7 days
+            if (hoursMissing > 24 && hoursMissing < 168) {
+              // 1-7 days
               events.push({
                 vesselId: vessel.vesselId,
-                vesselName: vessel.shipName || 'Unknown',
-                flag: vessel.flag || 'Unknown',
+                vesselName: "Unknown",
+                flag: vessel.flag || "Unknown",
                 lastSeen: vessel.entryTimestamp,
-                lastLat: vessel.lat || 0,
-                lastLon: vessel.lon || 0,
+                lastLat: 0,
+                lastLon: 0,
                 hoursMissing: Math.round(hoursMissing),
-                riskLevel: hoursMissing > 72 ? 'high' : hoursMissing > 48 ? 'medium' : 'low',
+                riskLevel:
+                  hoursMissing > 72
+                    ? "high"
+                    : hoursMissing > 48
+                    ? "medium"
+                    : "low",
               });
             }
           }
@@ -115,21 +121,29 @@ export default function VesselMonitor({
       setVesselEvents(events);
       setLastUpdate(new Date());
     } catch (error) {
-      console.error('Failed to fetch vessel data:', error);
+      console.error("Failed to fetch vessel data:", error);
       setVesselEvents([]);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [selectedEEZ, startDate, endDate, bufferValue]);
+
+  useEffect(() => {
+    if (selectedEEZ && isExpanded) {
+      fetchVesselData();
+    } else {
+      setVesselEvents([]);
+    }
+  }, [selectedEEZ, isExpanded, fetchVesselData]);
 
   const getRiskColor = (risk: string) => {
     switch (risk) {
-      case 'high':
-        return 'text-red-400 border-red-700/50 bg-red-950/20';
-      case 'medium':
-        return 'text-orange-400 border-orange-700/50 bg-orange-950/20';
+      case "high":
+        return "text-red-400 border-red-700/50 bg-red-950/20";
+      case "medium":
+        return "text-orange-400 border-orange-700/50 bg-orange-950/20";
       default:
-        return 'text-yellow-400 border-yellow-700/50 bg-yellow-950/20';
+        return "text-yellow-400 border-yellow-700/50 bg-yellow-950/20";
     }
   };
 
@@ -152,12 +166,19 @@ export default function VesselMonitor({
           )}
         </div>
         <svg
-          className={`w-4 h-4 text-cyan-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+          className={`w-4 h-4 text-cyan-400 transition-transform ${
+            isExpanded ? "rotate-180" : ""
+          }`}
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
         >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M19 9l-7 7-7-7"
+          />
         </svg>
       </button>
 
@@ -186,7 +207,9 @@ export default function VesselMonitor({
                 {vesselEvents.map((event, idx) => (
                   <div
                     key={`${event.vesselId}-${idx}`}
-                    className={`p-3 rounded border ${getRiskColor(event.riskLevel)}`}
+                    className={`p-3 rounded border ${getRiskColor(
+                      event.riskLevel
+                    )}`}
                   >
                     <div className="flex items-start justify-between mb-2">
                       <div>
@@ -199,21 +222,24 @@ export default function VesselMonitor({
                       </div>
                       <span
                         className={`px-2 py-0.5 rounded text-[10px] font-mono uppercase ${
-                          event.riskLevel === 'high'
-                            ? 'bg-red-500/20 text-red-400'
-                            : event.riskLevel === 'medium'
-                            ? 'bg-orange-500/20 text-orange-400'
-                            : 'bg-yellow-500/20 text-yellow-400'
+                          event.riskLevel === "high"
+                            ? "bg-red-500/20 text-red-400"
+                            : event.riskLevel === "medium"
+                            ? "bg-orange-500/20 text-orange-400"
+                            : "bg-yellow-500/20 text-yellow-400"
                         }`}
                       >
                         {event.riskLevel}
                       </span>
                     </div>
                     <div className="font-mono text-xs text-slate-400 space-y-1">
-                      <div>Last seen: {new Date(event.lastSeen).toLocaleString()}</div>
+                      <div>
+                        Last seen: {new Date(event.lastSeen).toLocaleString()}
+                      </div>
                       <div>Missing: ~{event.hoursMissing} hours</div>
                       <div>
-                        Last position: {event.lastLat.toFixed(2)}°, {event.lastLon.toFixed(2)}°
+                        Last position: {event.lastLat.toFixed(2)}°,{" "}
+                        {event.lastLon.toFixed(2)}°
                       </div>
                     </div>
                   </div>

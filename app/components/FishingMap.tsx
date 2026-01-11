@@ -44,7 +44,12 @@ interface StyleApiResponse {
   error?: string;
 }
 
-export default function FishingMap({ startDate, endDate, selectedEEZ, eezBuffer = 0 }: FishingMapProps) {
+export default function FishingMap({
+  startDate,
+  endDate,
+  selectedEEZ,
+  eezBuffer = 0,
+}: FishingMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -70,8 +75,8 @@ export default function FishingMap({ startDate, endDate, selectedEEZ, eezBuffer 
     setIsLoadingStyle(true);
 
     try {
-      // Using bright orange color for visibility
-      const url = `/api/generate-style?start=${startDate}&end=${endDate}&color=%23FF4500&interval=DAY`;
+      // Using bright cyan/turquoise for maximum visibility
+      const url = `/api/generate-style?start=${startDate}&end=${endDate}&color=%2303fcbe&interval=DAY`;
       log("STYLE", "📤 Requesting:", url);
 
       const response = await fetch(url);
@@ -175,23 +180,29 @@ export default function FishingMap({ startDate, endDate, selectedEEZ, eezBuffer 
 
       try {
         // Add the fishing effort tile source
+        // Lower maxzoom = blockier/coarser appearance when zoomed out
         map.current.addSource(sourceId, {
           type: "raster",
           tiles: [proxyTileUrl],
           tileSize: 256,
+          minzoom: 0,
+          maxzoom: 6, // Limit to low zoom tiles for blocky appearance
           attribution:
             '© <a href="https://globalfishingwatch.org">Global Fishing Watch</a>',
         });
         log("LAYER", "✅ Source added successfully");
 
-        // Add the fishing effort layer
+        // Add the fishing effort layer with high contrast
         map.current.addLayer({
           id: layerId,
           type: "raster",
           source: sourceId,
           paint: {
-            "raster-opacity": 0.85,
+            "raster-opacity": 1,
             "raster-fade-duration": 0,
+            "raster-contrast": 0.6,
+            "raster-brightness-min": 0.1,
+            "raster-saturation": 0.7,
           },
         });
         log("LAYER", "✅ Layer added successfully");
@@ -255,17 +266,20 @@ export default function FishingMap({ startDate, endDate, selectedEEZ, eezBuffer 
       }
 
       // Fetch actual EEZ boundary from Marine Regions (the source GFW uses)
-      log("EEZ", "🌍 Fetching boundary from Marine Regions", { 
-        regionId: region.id, 
+      log("EEZ", "🌍 Fetching boundary from Marine Regions", {
+        regionId: region.id,
         regionName: region.name,
         regionDataset: region.dataset,
-        buffer 
+        buffer,
       });
       addDebug(`Fetching boundary for ${region.name}...`);
 
       try {
         // Fetch boundary GeoJSON from our API (which proxies to Marine Regions)
-        const boundaryUrl = new URL("/api/eez-boundary", window.location.origin);
+        const boundaryUrl = new URL(
+          "/api/eez-boundary",
+          window.location.origin
+        );
         boundaryUrl.searchParams.set("region-id", region.id);
         boundaryUrl.searchParams.set("region-dataset", region.dataset);
         if (buffer > 0) {
@@ -274,27 +288,27 @@ export default function FishingMap({ startDate, endDate, selectedEEZ, eezBuffer 
         }
 
         const response = await fetch(boundaryUrl.toString());
-        
+
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
-          logError("EEZ", "Failed to fetch boundary", { 
-            status: response.status, 
-            error: errorData 
+          logError("EEZ", "Failed to fetch boundary", {
+            status: response.status,
+            error: errorData,
           });
           addDebug(`⚠️ Boundary fetch failed: ${response.status}`);
           return;
         }
 
         const geoJson = await response.json();
-        
+
         if (!geoJson.features || geoJson.features.length === 0) {
           log("EEZ", "⚠️ No boundary features returned");
           addDebug(`⚠️ No boundary data available`);
           return;
         }
 
-        log("EEZ", "✅ Boundary fetched", { 
-          featureCount: geoJson.features.length 
+        log("EEZ", "✅ Boundary fetched", {
+          featureCount: geoJson.features.length,
         });
 
         // Add GeoJSON source
@@ -329,50 +343,55 @@ export default function FishingMap({ startDate, endDate, selectedEEZ, eezBuffer 
 
         // Fit map to boundary bounds
         const bounds = new mapboxgl.LngLatBounds();
-        geoJson.features.forEach((feature: {
-          geometry: {
-            type: string;
-            coordinates: number[] | number[][] | number[][][];
-          };
-        }) => {
-          if (feature.geometry.type === "Polygon") {
-            const coords = feature.geometry.coordinates as number[][][];
-            if (coords && coords[0]) {
-              coords[0].forEach((coord: number[]) => {
-                if (coord.length >= 2) {
-                  bounds.extend([coord[0], coord[1]] as [number, number]);
-                }
-              });
-            }
-          } else if (feature.geometry.type === "MultiPolygon") {
-            const polygons = feature.geometry.coordinates as unknown as number[][][][];
-            polygons.forEach((polygon: number[][][]) => {
-              if (polygon && polygon[0]) {
-                polygon[0].forEach((coord: number[]) => {
+        geoJson.features.forEach(
+          (feature: {
+            geometry: {
+              type: string;
+              coordinates: number[] | number[][] | number[][][];
+            };
+          }) => {
+            if (feature.geometry.type === "Polygon") {
+              const coords = feature.geometry.coordinates as number[][][];
+              if (coords && coords[0]) {
+                coords[0].forEach((coord: number[]) => {
                   if (coord.length >= 2) {
                     bounds.extend([coord[0], coord[1]] as [number, number]);
                   }
                 });
               }
-            });
+            } else if (feature.geometry.type === "MultiPolygon") {
+              const polygons = feature.geometry
+                .coordinates as unknown as number[][][][];
+              polygons.forEach((polygon: number[][][]) => {
+                if (polygon && polygon[0]) {
+                  polygon[0].forEach((coord: number[]) => {
+                    if (coord.length >= 2) {
+                      bounds.extend([coord[0], coord[1]] as [number, number]);
+                    }
+                  });
+                }
+              });
+            }
           }
-        });
+        );
 
         if (!bounds.isEmpty()) {
           map.current.fitBounds(bounds, {
             padding: 50,
-            maxZoom: 8
+            maxZoom: 8,
           });
         }
 
-        log("EEZ", "✅ Boundary displayed", { 
-          regionId: region.id, 
-          regionName: region.name 
+        log("EEZ", "✅ Boundary displayed", {
+          regionId: region.id,
+          regionName: region.name,
         });
         addDebug(`✅ Boundary displayed from Marine Regions`);
       } catch (err) {
         logError("EEZ", "Failed to fetch/display boundary:", err);
-        addDebug(`❌ Error: ${err instanceof Error ? err.message : "Unknown error"}`);
+        addDebug(
+          `❌ Error: ${err instanceof Error ? err.message : "Unknown error"}`
+        );
       }
     },
     [isLoaded, addDebug]
@@ -464,6 +483,7 @@ export default function FishingMap({ startDate, endDate, selectedEEZ, eezBuffer 
       log("INIT", "✅ Map instance created successfully");
     } catch (error) {
       logError("INIT", "Failed to create map instance:", error);
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Error handling for external library initialization
       setMapError(`Failed to create map: ${error}`);
       return;
     }
@@ -485,28 +505,28 @@ export default function FishingMap({ startDate, endDate, selectedEEZ, eezBuffer 
       // Only log non-tile errors to avoid noise from expected failures
       const errorMsg = e.error?.message || "";
       const errorStatus = (e.error as { status?: number })?.status;
-      
+
       // Ignore expected errors:
       // - Tile loading errors (404, 422, etc.)
       // - Source/layer errors from EEZ boundary (which may not be available)
       // - Vector tile parsing errors
-      const isExpectedError = 
+      // - Empty error messages (usually network/CORS issues with tiles)
+      const isExpectedError =
+        !errorMsg || // Empty error messages are usually tile loading issues
         errorMsg.includes("tile") ||
         errorMsg.includes("404") ||
         errorMsg.includes("422") ||
         errorMsg.includes("Not Found") ||
         errorMsg.includes("Unprocessable") ||
         errorMsg.includes("vector") ||
-        (errorMsg.includes("source") && (errorMsg.includes("eez") || errorMsg.includes("boundary"))) ||
+        errorMsg.includes("source") ||
+        errorMsg.includes("layer") ||
         errorStatus === 404 ||
         errorStatus === 422;
-      
+
       if (!isExpectedError) {
         logError("EVENT", "Map error event:", e);
-        // Don't set mapError for expected failures
-        if (!errorMsg.includes("layer")) {
-          setMapError(`Map error: ${errorMsg || "unknown"}`);
-        }
+        setMapError(`Map error: ${errorMsg}`);
       }
     });
 
@@ -555,6 +575,7 @@ export default function FishingMap({ startDate, endDate, selectedEEZ, eezBuffer 
         endDate,
         isLoaded,
       });
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Async fetch for external map data
       fetchStyle();
     }
   }, [isLoaded, startDate, endDate, fetchStyle]);
@@ -563,6 +584,7 @@ export default function FishingMap({ startDate, endDate, selectedEEZ, eezBuffer 
   useEffect(() => {
     if (isLoaded && tileUrl) {
       log("EFFECT", "🗺️ Tile URL ready, updating layer");
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Updating external Mapbox layer
       updateFishingLayer(tileUrl);
     }
   }, [isLoaded, tileUrl, updateFishingLayer]);
@@ -571,6 +593,7 @@ export default function FishingMap({ startDate, endDate, selectedEEZ, eezBuffer 
   useEffect(() => {
     if (isLoaded) {
       log("EFFECT", "🌍 EEZ region changed, updating boundary layer");
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Updating external Mapbox layer
       updateEEZLayer(selectedEEZ || null, eezBuffer || 0);
     }
   }, [isLoaded, selectedEEZ, eezBuffer, updateEEZLayer]);

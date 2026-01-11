@@ -38,7 +38,7 @@ export default function TimeControls({ startDate, endDate, onDateChange }: TimeC
       const end = getDateFromDaysAgo(DATA_DELAY_DAYS);
       const start = getDateFromDaysAgo(preset.days + DATA_DELAY_DAYS);
       onDateChange(start, end);
-    } else if ('start' in preset && 'end' in preset) {
+    } else if ('start' in preset && 'end' in preset && preset.start && preset.end) {
       onDateChange(preset.start, preset.end);
     }
   };
