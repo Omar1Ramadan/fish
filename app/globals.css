@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #020617;
+  --foreground: #e2e8f0;
 }
 
 @theme inline {
@@ -12,15 +12,74 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Mapbox overrides for dark theme */
+.mapboxgl-ctrl-group {
+  background: rgba(2, 6, 23, 0.9) !important;
+  border: 1px solid rgba(34, 211, 238, 0.2) !important;
+  backdrop-filter: blur(8px);
+}
+
+.mapboxgl-ctrl-group button {
+  border-color: rgba(34, 211, 238, 0.1) !important;
+}
+
+.mapboxgl-ctrl-group button:hover {
+  background-color: rgba(34, 211, 238, 0.1) !important;
+}
+
+.mapboxgl-ctrl-group button span {
+  filter: invert(1);
+}
+
+.mapboxgl-ctrl-scale {
+  background: rgba(2, 6, 23, 0.9) !important;
+  border: 1px solid rgba(34, 211, 238, 0.2) !important;
+  color: #22d3ee !important;
+  font-family: ui-monospace, monospace;
+  font-size: 10px;
+  backdrop-filter: blur(8px);
+}
+
+.mapboxgl-ctrl-attrib {
+  background: rgba(2, 6, 23, 0.8) !important;
+  backdrop-filter: blur(8px);
+}
+
+.mapboxgl-ctrl-attrib a {
+  color: rgba(34, 211, 238, 0.6) !important;
+}
+
+/* Date input styling for webkit browsers */
+input[type="date"] {
+  color-scheme: dark;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.7) sepia(1) saturate(5) hue-rotate(150deg);
+  cursor: pointer;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(2, 6, 23, 0.5);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(34, 211, 238, 0.3);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(34, 211, 238, 0.5);
 }
