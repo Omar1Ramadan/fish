@@ -39,3 +39,21 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# ML data (too large to push)
+ml/data/raw/
+ml/data/gaps/
+ml/data/preprocessed/
+ml/data/normalized*/
+
+# ML models (can be retrained)
+ml/models/*.h5
+ml/models/*.json
+!ml/models/__init__.py
+
+# Python
+ml/venv/
+ml/__pycache__/
+ml/**/__pycache__/
+*.pyc
+*.pyo
