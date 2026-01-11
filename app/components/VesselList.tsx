@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 
 interface EEZRegion {
   id: string;
@@ -182,9 +182,21 @@ export default function VesselList({
       console.log("[VesselList] 📥 Response status:", response.status);
 
       if (!response.ok) {
-        const errorData = await response.json();
-        console.error("[VesselList] ❌ Error response:", errorData);
-        throw new Error(errorData.error || "Failed to fetch vessels");
+        let errorMessage = "Failed to fetch vessels";
+        try {
+          const errorData = await response.json();
+          console.error("[VesselList] ❌ Error response:", errorData);
+          errorMessage = errorData.error || errorMessage;
+        } catch {
+          console.error("[VesselList] ❌ Error status:", response.status);
+        }
+        // Don't throw on rate limit or temporary errors - just log
+        if (response.status === 429 || response.status >= 500) {
+          console.warn("[VesselList] ⚠️ Temporary error, will retry on next change");
+          setIsLoading(false);
+          return;
+        }
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();
@@ -204,12 +216,30 @@ export default function VesselList({
     }
   }, [selectedEEZ, startDate, endDate, bufferValue]);
 
-  // Fetch on mount and when dependencies change
+  // Debounce timer ref
+  const fetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Fetch on mount and when dependencies change (debounced)
   useEffect(() => {
-    fetchVessels();
-    // Reset gap checks when region/dates change
+    // Clear any pending fetch
+    if (fetchTimeoutRef.current) {
+      clearTimeout(fetchTimeoutRef.current);
+    }
+
+    // Reset gap checks immediately when dates change
     setGapChecks({});
     setShowOnlyWithGaps(false);
+
+    // Debounce the fetch to avoid rapid-fire requests when dragging slider
+    fetchTimeoutRef.current = setTimeout(() => {
+      fetchVessels();
+    }, 500); // Wait 500ms after last change before fetching
+
+    return () => {
+      if (fetchTimeoutRef.current) {
+        clearTimeout(fetchTimeoutRef.current);
+      }
+    };
   }, [fetchVessels]);
 
   // Check vessels for AIS gaps (with optional limit)

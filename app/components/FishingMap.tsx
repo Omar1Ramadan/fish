@@ -960,16 +960,34 @@ export default function FishingMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- Only run on mount, onMapReady is stable via useCallback
   }, []);
 
-  // Fetch style and update layer when map loads or dates change
+  // Debounce ref for style fetching
+  const styleTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Fetch style and update layer when map loads or dates change (debounced)
   useEffect(() => {
     if (isLoaded) {
-      log("EFFECT", "📅 Map loaded, fetching style", {
+      // Clear any pending fetch
+      if (styleTimeoutRef.current) {
+        clearTimeout(styleTimeoutRef.current);
+      }
+
+      log("EFFECT", "📅 Date change detected, debouncing style fetch", {
         startDate,
         endDate,
-        isLoaded,
       });
-      fetchStyle();
+
+      // Debounce the fetch to avoid rapid-fire requests when dragging slider
+      styleTimeoutRef.current = setTimeout(() => {
+        log("EFFECT", "📅 Fetching style after debounce");
+        fetchStyle();
+      }, 300); // Wait 300ms after last change before fetching
     }
+
+    return () => {
+      if (styleTimeoutRef.current) {
+        clearTimeout(styleTimeoutRef.current);
+      }
+    };
   }, [isLoaded, startDate, endDate, excludedCountries, fetchStyle]);
 
   // Update layer when tile URL is set
