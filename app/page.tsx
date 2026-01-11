@@ -168,29 +168,35 @@ export default function Home() {
       {/* Header overlay */}
       <div className="absolute top-0 left-0 right-0 p-4 pointer-events-none">
         <div className="flex items-start justify-between">
-          {/* Logo/Title with More Info button */}
+          {/* Logo/Title */}
           <div className="pointer-events-auto">
-            <div className="bg-slate-950/90 backdrop-blur-md border border-cyan-900/30 rounded-lg px-4 py-3 shadow-2xl shadow-cyan-950/20">
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-3">
-                  <div className="relative">
-                    <div className="w-3 h-3 bg-cyan-400 rounded-full" />
-                    <div className="absolute inset-0 w-3 h-3 bg-cyan-400 rounded-full animate-ping opacity-75" />
-                  </div>
-                  <div>
-                    <h1 className="font-mono text-lg font-bold text-white tracking-tight">
-                      FISHY
-                    </h1>
-                    <p className="font-mono text-[10px] text-cyan-400/70 uppercase tracking-widest">
-                      Dark Vessel Monitor
-                    </p>
-                  </div>
+            <div className="bg-slate-950/90 backdrop-blur-md border border-cyan-900/30 rounded-xl px-4 py-3 shadow-2xl shadow-cyan-950/20">
+              <div className="flex items-center gap-3">
+                {/* Blinking Dot */}
+                <div className="relative">
+                  <div className="w-3 h-3 bg-cyan-400 rounded-full" />
+                  <div className="absolute inset-0 w-3 h-3 bg-cyan-400 rounded-full animate-ping opacity-75" />
                 </div>
+                {/* Title */}
+                <div className="flex flex-col">
+                  <h1 className="font-mono text-lg font-bold text-white tracking-tight leading-none">
+                    FISHY
+                  </h1>
+                  <p className="font-mono text-[10px] text-cyan-400/70 uppercase tracking-wider">
+                    Dark Vessel Monitor
+                  </p>
+                </div>
+                {/* Divider */}
+                <div className="w-px h-8 bg-slate-700/50 mx-1" />
+                {/* Info Button */}
                 <button
                   onClick={() => setShowInfoPopup(true)}
-                  className="px-2.5 py-1 bg-slate-800/60 hover:bg-slate-700 text-slate-400 hover:text-slate-200 rounded text-xs font-mono transition-colors"
+                  className="w-8 h-8 flex items-center justify-center bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20 hover:border-cyan-500/50 rounded-lg transition-all"
+                  title="About FISHY"
                 >
-                  More Info
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
                 </button>
               </div>
             </div>
