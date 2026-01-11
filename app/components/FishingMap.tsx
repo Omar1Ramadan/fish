@@ -33,6 +33,7 @@ interface FishingMapProps {
   endDate: string;
   selectedEEZ?: EEZRegion | null;
   eezBuffer?: number;
+  excludedCountries?: string[];
 }
 
 interface StyleApiResponse {
@@ -49,6 +50,7 @@ export default function FishingMap({
   endDate,
   selectedEEZ,
   eezBuffer = 0,
+  excludedCountries = [],
 }: FishingMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
@@ -63,13 +65,21 @@ export default function FishingMap({
 
   // Fetch style from GFW API when dates change
   const fetchStyle = useCallback(async () => {
-    log("STYLE", "🎨 Fetching style from GFW API", { startDate, endDate });
+    log("STYLE", "🎨 Fetching style from GFW API", {
+      startDate,
+      endDate,
+      excludedCountries,
+    });
     addDebug(`Fetching style: ${startDate} to ${endDate}`);
     setIsLoadingStyle(true);
 
     try {
       // Using bright cyan/turquoise for maximum visibility
-      const url = `/api/generate-style?start=${startDate}&end=${endDate}&color=%2303fcbe&interval=DAY`;
+      const excludeParam =
+        excludedCountries.length > 0
+          ? `&excludeFlags=${excludedCountries.join(",")}`
+          : "";
+      const url = `/api/generate-style?start=${startDate}&end=${endDate}&color=%2303fcbe&interval=DAY${excludeParam}`;
       log("STYLE", "📤 Requesting:", url);
 
       const response = await fetch(url);
@@ -118,7 +128,7 @@ export default function FishingMap({
       setIsLoadingStyle(false);
       return null;
     }
-  }, [startDate, endDate, addDebug]);
+  }, [startDate, endDate, excludedCountries, addDebug]);
 
   // Update fishing layer with the tile URL from GFW
   const updateFishingLayer = useCallback(
@@ -160,9 +170,13 @@ export default function FishingMap({
         gfwUrlObj.searchParams.get("date-range") || `${startDate},${endDate}`;
 
       // Our proxy URL with the style from GFW
+      const excludeParam =
+        excludedCountries.length > 0
+          ? `&excludeFlags=${excludedCountries.join(",")}`
+          : "";
       const proxyTileUrl = `/api/tiles?z={z}&x={x}&y={y}&start=${startDate}&end=${endDate}&style=${encodeURIComponent(
         style || ""
-      )}&interval=${interval}`;
+      )}&interval=${interval}${excludeParam}`;
 
       log("LAYER", "📍 Adding fishing effort source", {
         proxyUrl: proxyTileUrl.substring(0, 80) + "...",
@@ -205,7 +219,7 @@ export default function FishingMap({
         addDebug(`Layer error: ${err}`);
       }
     },
-    [startDate, endDate, isLoaded, addDebug]
+    [startDate, endDate, isLoaded, excludedCountries, addDebug]
   );
 
   // Update EEZ boundary layer
@@ -562,7 +576,7 @@ export default function FishingMap({
       // eslint-disable-next-line react-hooks/set-state-in-effect -- Async fetch for external map data
       fetchStyle();
     }
-  }, [isLoaded, startDate, endDate, fetchStyle]);
+  }, [isLoaded, startDate, endDate, excludedCountries, fetchStyle]);
 
   // Update layer when tile URL is set
   useEffect(() => {

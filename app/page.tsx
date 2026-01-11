@@ -4,6 +4,7 @@ import { useState, useCallback } from "react";
 import dynamic from "next/dynamic";
 import TimelineSlider from "./components/TimelineSlider";
 import EEZSelector from "./components/EEZSelector";
+import CountryFilter from "./components/CountryFilter";
 
 // Dynamic import to avoid SSR issues with Mapbox
 const FishingMap = dynamic(() => import("./components/FishingMap"), {
@@ -41,6 +42,7 @@ export default function Home() {
   const [endDate, setEndDate] = useState("2025-09-30");
   const [selectedEEZ, setSelectedEEZ] = useState<EEZRegion | null>(GALAPAGOS_EEZ);
   const [eezBuffer, setEezBuffer] = useState(0);
+  const [excludedCountries, setExcludedCountries] = useState<string[]>([]);
 
   const handleDateChange = useCallback((start: string, end: string) => {
     setStartDate(start);
@@ -55,6 +57,7 @@ export default function Home() {
         endDate={endDate}
         selectedEEZ={selectedEEZ}
         eezBuffer={eezBuffer}
+        excludedCountries={excludedCountries}
       />
 
       {/* Header overlay */}
@@ -82,33 +85,22 @@ export default function Home() {
         </div>
       </div>
 
-      {/* EEZ Selector */}
+      {/* EEZ Selector and Country Filter */}
       <div className="absolute top-4 right-4 pointer-events-auto">
-        <div className="w-80">
+        <div className="w-80 space-y-3">
           <EEZSelector
             selectedRegion={selectedEEZ}
             onRegionSelect={setSelectedEEZ}
             onBufferChange={setEezBuffer}
             bufferValue={eezBuffer}
           />
+          <CountryFilter
+            excludedCountries={excludedCountries}
+            onExcludedCountriesChange={setExcludedCountries}
+          />
         </div>
       </div>
 
-      {/* Legend - positioned in top right area below EEZ selector */}
-      <div className="absolute top-48 right-4 pointer-events-auto">
-        <div className="bg-slate-950/90 backdrop-blur-md border border-cyan-900/30 rounded-lg px-4 py-3 shadow-2xl shadow-cyan-950/20">
-          <div className="font-mono text-xs text-slate-500 uppercase mb-2">
-            Fishing Intensity
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="h-2 w-32 rounded-full bg-linear-to-r from-transparent via-emerald-400 to-cyan-300" />
-          </div>
-          <div className="flex justify-between mt-1">
-            <span className="font-mono text-[10px] text-slate-600">Low</span>
-            <span className="font-mono text-[10px] text-slate-600">High</span>
-          </div>
-        </div>
-      </div>
 
       {/* Info panel */}
       <div className="absolute left-4 top-24 pointer-events-auto max-w-xs">

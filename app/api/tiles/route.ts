@@ -46,6 +46,7 @@ export async function GET(request: NextRequest) {
   const endDate = searchParams.get("end") || "2024-03-31";
   const style = searchParams.get("style");
   const interval = searchParams.get("interval") || "DAY";
+  const excludeFlags = searchParams.get("excludeFlags") || "";
 
   // Log every 10th tile to reduce noise
   const shouldLog = Math.random() < 0.1;
@@ -81,6 +82,16 @@ export async function GET(request: NextRequest) {
   queryParts.push(`interval=${interval}`);
   queryParts.push(`datasets[0]=public-global-fishing-effort:latest`);
   queryParts.push(`date-range=${startDate},${endDate}`);
+
+  // Add flag exclusion filter if specified
+  if (excludeFlags && excludeFlags.length > 0) {
+    const flagList = excludeFlags
+      .split(",")
+      .map((f: string) => `'${f.trim()}'`)
+      .join(",");
+    const filter = `flag not in (${flagList})`;
+    queryParts.push(`filters[0]=${encodeURIComponent(filter)}`);
+  }
 
   // Add the style parameter if provided
   // CRITICAL: The style must be passed correctly for proper visualization
