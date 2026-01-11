@@ -1274,21 +1274,6 @@ export default function FishingMap({
           </div>
         </div>
       )}
-
-      {/* Selected vessel info */}
-      {isLoaded && selectedVessel && vesselTrack && vesselTrack.length > 0 && (
-        <div className="absolute top-20 right-4 bg-slate-950/90 backdrop-blur-md border border-orange-900/30 rounded-lg px-4 py-3 z-30">
-          <div className="font-mono text-xs text-slate-500 uppercase mb-1">
-            Tracking
-          </div>
-          <div className="font-mono text-sm text-white font-semibold">
-            {selectedVessel.name}
-          </div>
-          <div className="font-mono text-xs text-orange-400 mt-1">
-            {vesselTrack.length} fishing events
-          </div>
-        </div>
-      )}
     </div>
   );
 }
