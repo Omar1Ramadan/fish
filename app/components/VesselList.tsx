@@ -438,9 +438,10 @@ export default function VesselList({
                 <div className="space-y-2">
                   <button
                     onClick={() => checkForGaps(30)}
-                    className="w-full py-2 px-3 bg-slate-700/50 hover:bg-slate-700 border border-slate-600/50 rounded-lg transition-colors"
+                    className="w-full py-2 px-3 bg-amber-600/20 hover:bg-amber-600/30 border border-amber-500/30 rounded-lg transition-colors flex items-center justify-center gap-2"
                   >
-                    <span className="font-mono text-xs text-slate-300">
+                    <span className="text-amber-400">⚡</span>
+                    <span className="font-mono text-xs text-amber-300">
                       Quick Scan (Top 30)
                     </span>
                   </button>
@@ -477,10 +478,13 @@ export default function VesselList({
               {hasGapCheckData && !isCheckingGaps && (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="font-mono text-xs text-slate-300">
-                      {vesselsWithGapsCount} vessel
-                      {vesselsWithGapsCount !== 1 ? "s" : ""} with AIS gaps
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-red-400">🔴</span>
+                      <span className="font-mono text-xs text-slate-300">
+                        {vesselsWithGapsCount} vessel
+                        {vesselsWithGapsCount !== 1 ? "s" : ""} with AIS gaps
+                      </span>
+                    </div>
                     <span className="font-mono text-[10px] text-slate-600">
                       {Object.keys(gapChecks).length}/{vessels.length} scanned
                     </span>
@@ -562,7 +566,9 @@ export default function VesselList({
                   onClick={() => handleVesselClick(vessel)}
                   className={`w-full px-4 py-3 flex items-center gap-3 border-b border-slate-800/50 last:border-b-0 transition-colors text-left ${
                     selectedVessel?.vesselId === vessel.vesselId
-                      ? "bg-slate-800/60 border-l-2 border-l-slate-400"
+                      ? "bg-cyan-950/40 border-l-2 border-l-cyan-400"
+                      : vessel.hasGaps
+                      ? "bg-red-950/20 hover:bg-red-950/30"
                       : "hover:bg-slate-900/50"
                   }`}
                 >
@@ -586,12 +592,12 @@ export default function VesselList({
                       {/* Gap indicator */}
                       {vessel.hasGaps && !(selectedVessel?.vesselId === vessel.vesselId && hasPredictionActive) && (
                         <span
-                          className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-slate-700/50 border border-slate-600/50 rounded text-[9px] font-mono text-slate-400"
+                          className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-red-500/20 border border-red-500/30 rounded text-[9px] font-mono text-red-400"
                           title={`${vessel.gapCount} AIS gap${
                             vessel.gapCount !== 1 ? "s" : ""
                           } (${Math.round(vessel.totalGapHours || 0)}h dark)`}
                         >
-                          {vessel.gapCount} gaps
+                          🔴 {vessel.gapCount}
                         </span>
                       )}
                     </div>
@@ -612,7 +618,7 @@ export default function VesselList({
                         vessel.totalGapHours > 0 && (
                           <>
                             <span className="text-slate-700">•</span>
-                            <span className="font-mono text-[10px] text-slate-500">
+                            <span className="font-mono text-[10px] text-red-400">
                               {Math.round(vessel.totalGapHours)}h dark
                             </span>
                           </>
@@ -671,7 +677,7 @@ export default function VesselList({
                   <span className="font-mono text-[10px] text-slate-600">
                     Total dark hours
                   </span>
-                  <span className="font-mono text-[10px] text-slate-400">
+                  <span className="font-mono text-[10px] text-red-400">
                     {Math.round(
                       vesselsWithGaps.reduce(
                         (sum, v) => sum + (v.totalGapHours || 0),

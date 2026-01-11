@@ -32,7 +32,10 @@ interface VesselPanelProps {
   startDate: string;
   endDate: string;
   onClose: () => void;
-  onPredictionGenerated: (prediction: PredictionData | null, gapId: string | null) => void;
+  onPredictionGenerated: (
+    prediction: PredictionData | null,
+    gapId: string | null
+  ) => void;
   activePredictionGapId: string | null;
 }
 
@@ -42,15 +45,43 @@ const getFlagEmoji = (countryCode: string): string => {
     return "🏴";
   }
   const alpha3ToAlpha2: Record<string, string> = {
-    CHN: "CN", TWN: "TW", JPN: "JP", KOR: "KR", ESP: "ES", USA: "US",
-    RUS: "RU", PRT: "PT", FRA: "FR", GBR: "GB", NOR: "NO", ISL: "IS",
-    CHL: "CL", PER: "PE", ARG: "AR", ECU: "EC", MEX: "MX", PAN: "PA",
-    VNM: "VN", THA: "TH", IDN: "ID", PHL: "PH", MYS: "MY", IND: "IN",
-    NZL: "NZ", AUS: "AU", ZAF: "ZA", BRA: "BR", CAN: "CA", URY: "UY",
+    CHN: "CN",
+    TWN: "TW",
+    JPN: "JP",
+    KOR: "KR",
+    ESP: "ES",
+    USA: "US",
+    RUS: "RU",
+    PRT: "PT",
+    FRA: "FR",
+    GBR: "GB",
+    NOR: "NO",
+    ISL: "IS",
+    CHL: "CL",
+    PER: "PE",
+    ARG: "AR",
+    ECU: "EC",
+    MEX: "MX",
+    PAN: "PA",
+    VNM: "VN",
+    THA: "TH",
+    IDN: "ID",
+    PHL: "PH",
+    MYS: "MY",
+    IND: "IN",
+    NZL: "NZ",
+    AUS: "AU",
+    ZAF: "ZA",
+    BRA: "BR",
+    CAN: "CA",
+    URY: "UY",
   };
   const alpha2 = alpha3ToAlpha2[countryCode.toUpperCase()];
   if (!alpha2) return "🏴";
-  const codePoints = alpha2.toUpperCase().split("").map((char) => 127397 + char.charCodeAt(0));
+  const codePoints = alpha2
+    .toUpperCase()
+    .split("")
+    .map((char) => 127397 + char.charCodeAt(0));
   return String.fromCodePoint(...codePoints);
 };
 
@@ -123,53 +154,56 @@ export default function VesselPanel({
   }, [fetchGaps]);
 
   // Generate prediction for a specific gap
-  const runPrediction = useCallback(async (gap: GapEvent, aggression: number) => {
-    if (!vessel) return;
+  const runPrediction = useCallback(
+    async (gap: GapEvent, aggression: number) => {
+      if (!vessel) return;
 
-    setPredictingGapId(gap.id);
+      setPredictingGapId(gap.id);
 
-    try {
-      const response = await fetch("/api/predict-path", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          vesselId: vessel.vesselId,
-          lastPosition: {
-            lat: gap.position.lat,
-            lon: gap.position.lon,
+      try {
+        const response = await fetch("/api/predict-path", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
           },
-          lastSpeed: 8.0, // Default speed estimate (knots)
-          lastCourse: 0, // Will use model to estimate
-          gapDurationHours: gap.durationHours || 12,
-          modelType: "lstm",
-          aggressionFactor: aggression, // Scales the prediction distance
-        }),
-      });
+          body: JSON.stringify({
+            vesselId: vessel.vesselId,
+            lastPosition: {
+              lat: gap.position.lat,
+              lon: gap.position.lon,
+            },
+            lastSpeed: 8.0, // Default speed estimate (knots)
+            lastCourse: 0, // Will use model to estimate
+            gapDurationHours: gap.durationHours || 12,
+            modelType: "lstm",
+            aggressionFactor: aggression, // Scales the prediction distance
+          }),
+        });
 
-      if (!response.ok) {
-        throw new Error(`Prediction failed: ${response.status}`);
+        if (!response.ok) {
+          throw new Error(`Prediction failed: ${response.status}`);
+        }
+
+        const data = await response.json();
+        console.log("[VesselPanel] Prediction result:", data);
+
+        // Create PredictionData from response
+        const predictionData: PredictionData = {
+          startPosition: [gap.position.lat, gap.position.lon],
+          predictedPosition: data.prediction.predictedPosition,
+          uncertaintyNm: data.prediction.uncertaintyNm,
+          probabilityCloud: data.probabilityCloud,
+        };
+
+        onPredictionGenerated(predictionData, gap.id);
+      } catch (err) {
+        console.error("[VesselPanel] Prediction error:", err);
+      } finally {
+        setPredictingGapId(null);
       }
-
-      const data = await response.json();
-      console.log("[VesselPanel] Prediction result:", data);
-
-      // Create PredictionData from response
-      const predictionData: PredictionData = {
-        startPosition: [gap.position.lat, gap.position.lon],
-        predictedPosition: data.prediction.predictedPosition,
-        uncertaintyNm: data.prediction.uncertaintyNm,
-        probabilityCloud: data.probabilityCloud,
-      };
-
-      onPredictionGenerated(predictionData, gap.id);
-    } catch (err) {
-      console.error("[VesselPanel] Prediction error:", err);
-    } finally {
-      setPredictingGapId(null);
-    }
-  }, [vessel, onPredictionGenerated]);
+    },
+    [vessel, onPredictionGenerated]
+  );
 
   // Handle predict button click
   const handlePredict = async (gap: GapEvent) => {
@@ -264,12 +298,16 @@ export default function VesselPanel({
       <div className="px-4 py-2 bg-slate-900/50 flex items-center gap-4 text-[10px] font-mono">
         <div className="flex items-center gap-1">
           <span className="text-slate-500">Fishing:</span>
-          <span className="text-cyan-400">{vessel.fishingHours.toFixed(1)}h</span>
+          <span className="text-cyan-400">
+            {vessel.fishingHours.toFixed(1)}h
+          </span>
         </div>
         {vessel.hasGaps && (
           <div className="flex items-center gap-1">
             <span className="text-slate-500">Dark:</span>
-            <span className="text-red-400">{Math.round(vessel.totalGapHours || 0)}h</span>
+            <span className="text-red-400">
+              {Math.round(vessel.totalGapHours || 0)}h
+            </span>
           </div>
         )}
         <div className="flex items-center gap-1">
@@ -324,7 +362,9 @@ export default function VesselPanel({
         {isLoadingGaps && (
           <div className="px-4 py-8 flex flex-col items-center gap-2">
             <div className="w-5 h-5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
-            <span className="font-mono text-xs text-slate-500">Loading gaps...</span>
+            <span className="font-mono text-xs text-slate-500">
+              Loading gaps...
+            </span>
           </div>
         )}
 
@@ -383,11 +423,6 @@ export default function VesselPanel({
                         >
                           {formatDuration(gap.durationHours)}
                         </span>
-                        {gap.intentionalDisabling && (
-                          <span className="px-1.5 py-0.5 bg-red-600/20 text-red-400 rounded text-[9px] font-mono border border-red-600/30">
-                            INTENTIONAL
-                          </span>
-                        )}
                       </div>
                       <div className="mt-1 font-mono text-[10px] text-slate-500">
                         {formatDate(gap.startTime)} → {formatDate(gap.endTime)}
@@ -395,7 +430,8 @@ export default function VesselPanel({
                       <div className="mt-0.5 font-mono text-[10px] text-slate-600">
                         Position: {gap.position?.lat?.toFixed?.(4) ?? "?"}°,{" "}
                         {gap.position?.lon?.toFixed?.(4) ?? "?"}°
-                        {typeof gap.distanceKm === "number" && ` • ${gap.distanceKm.toFixed(0)}km traveled`}
+                        {typeof gap.distanceKm === "number" &&
+                          ` • ${gap.distanceKm.toFixed(0)}km traveled`}
                       </div>
                     </div>
 
@@ -433,7 +469,8 @@ export default function VesselPanel({
       {/* Footer Info */}
       <div className="px-4 py-2 border-t border-slate-800 bg-slate-900/30">
         <p className="font-mono text-[10px] text-slate-600">
-          Click &quot;Predict Path&quot; to see where the vessel may have gone during the AIS gap
+          Click &quot;Predict Path&quot; to see where the vessel may have gone
+          during the AIS gap
         </p>
       </div>
     </div>
