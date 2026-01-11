@@ -6,7 +6,7 @@ import TimelineSlider from "./components/TimelineSlider";
 import EEZSelector from "./components/EEZSelector";
 import CountryFilter from "./components/CountryFilter";
 import LoadingScreen from "./components/LoadingScreen";
-import VesselMonitor from "./components/VesselMonitor";
+import VesselList from "./components/VesselList";
 
 // Dynamic import to avoid SSR issues with Mapbox
 const FishingMap = dynamic(() => import("./components/FishingMap"), {
@@ -30,23 +30,32 @@ interface EEZRegion {
   dataset: string;
 }
 
-// Default to Galapagos Marine Reserve
+// Default to Ecuador EEZ (includes Galapagos) - MRGID 8403
 const GALAPAGOS_EEZ: EEZRegion = {
-  id: "555635930",
-  name: "Galapagos Marine Reserve",
+  id: "8403",
+  name: "Ecuador EEZ (Galapagos)",
   country: "Ecuador",
-  dataset: "public-mpa-all",
+  dataset: "public-eez-areas",
 };
 
 export default function Home() {
   // Default dates: Jul 1, 2025 to Sep 30, 2025 (~3 month window)
+  // This captures the Chinese fishing fleet season near Galapagos
   const [startDate, setStartDate] = useState("2025-07-01");
   const [endDate, setEndDate] = useState("2025-09-30");
   const [selectedEEZ, setSelectedEEZ] = useState<EEZRegion | null>(null); // Start with no EEZ selected
-  const [eezBuffer, setEezBuffer] = useState(0);
+  const [eezBuffer, setEezBuffer] = useState(200); // 200nm buffer to catch vessels in international waters near EEZ
   const [excludedCountries, setExcludedCountries] = useState<string[]>([]);
   const [isMapReady, setIsMapReady] = useState(false);
   const [showLoadingScreen, setShowLoadingScreen] = useState(true);
+  const [selectedVessel, setSelectedVessel] = useState<{
+    vesselId: string;
+    mmsi: string;
+    name: string;
+    flag: string;
+    gearType: string;
+    fishingHours: number;
+  } | null>(null);
 
   const handleDateChange = useCallback((start: string, end: string) => {
     setStartDate(start);
@@ -73,6 +82,7 @@ export default function Home() {
         eezBuffer={eezBuffer}
         excludedCountries={excludedCountries}
         onMapReady={handleMapReady}
+        selectedVessel={selectedVessel}
       />
 
       {/* Loading Screen */}
@@ -151,14 +161,15 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Vessel Monitor - bottom left */}
-      <div className="absolute bottom-4 left-4 pointer-events-auto">
-        <VesselMonitor
+      {/* Vessel List - left side */}
+      <div className="absolute left-4 top-48 pointer-events-auto w-80">
+        <VesselList
           selectedEEZ={selectedEEZ}
           startDate={startDate}
           endDate={endDate}
           bufferValue={eezBuffer}
-          // onPredictionGenerated={setProbabilityCloud}
+          selectedVessel={selectedVessel}
+          onVesselSelect={setSelectedVessel}
         />
       </div>
 

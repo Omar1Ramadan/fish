@@ -29,6 +29,15 @@ interface EEZRegion {
   dataset: string;
 }
 
+interface SelectedVessel {
+  vesselId: string;
+  mmsi: string;
+  name: string;
+  flag: string;
+  gearType: string;
+  fishingHours: number;
+}
+
 interface FishingMapProps {
   startDate: string;
   endDate: string;
@@ -44,6 +53,7 @@ interface FishingMapProps {
     }>;
   } | null;
   onMapReady?: (map: mapboxgl.Map) => void;
+  selectedVessel?: SelectedVessel | null;
 }
 
 interface StyleApiResponse {
@@ -63,6 +73,7 @@ export default function FishingMap({
   excludedCountries = [],
   probabilityCloud,
   onMapReady,
+  selectedVessel,
 }: FishingMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
@@ -72,6 +83,13 @@ export default function FishingMap({
   const [tileUrl, setTileUrl] = useState<string | null>(null);
   const [isLoadingStyle, setIsLoadingStyle] = useState(false);
   const [mapInstance, setMapInstance] = useState<mapboxgl.Map | null>(null);
+  const [isLoadingTrack, setIsLoadingTrack] = useState(false);
+  const [vesselTrack, setVesselTrack] = useState<Array<{
+    id: string;
+    type: string;
+    startTime: string;
+    position: { lat: number; lon: number };
+  }> | null>(null);
 
   // Orbit animation functions
   const stopOrbitAnimation = useCallback(() => {
@@ -443,6 +461,196 @@ export default function FishingMap({
     [isLoaded, addDebug, startOrbitAnimation, stopOrbitAnimation]
   );
 
+  // Update vessel track layer
+  const updateVesselTrackLayer = useCallback(
+    (
+      trackEvents: Array<{
+        id: string;
+        type: string;
+        startTime: string;
+        position: { lat: number; lon: number };
+      }> | null
+    ) => {
+      log("TRACK", "🔄 updateVesselTrackLayer called", {
+        isLoaded,
+        hasMap: !!map.current,
+        eventCount: trackEvents?.length,
+      });
+
+      if (!map.current || !isLoaded) {
+        log("TRACK", "⚠️ Map not ready, skipping track update");
+        return;
+      }
+
+      const trackSourceId = "vessel-track";
+      const trackLineLayerId = "vessel-track-line";
+      const trackPointsLayerId = "vessel-track-points";
+
+      // Remove existing track layers
+      if (map.current.getLayer(trackPointsLayerId)) {
+        map.current.removeLayer(trackPointsLayerId);
+      }
+      if (map.current.getLayer(trackLineLayerId)) {
+        map.current.removeLayer(trackLineLayerId);
+      }
+      if (map.current.getSource(trackSourceId)) {
+        map.current.removeSource(trackSourceId);
+      }
+
+      if (!trackEvents || trackEvents.length === 0) {
+        log("TRACK", "✅ Track layer removed (no events)");
+        return;
+      }
+
+      // Create GeoJSON for track
+      const trackPoints: GeoJSON.FeatureCollection = {
+        type: "FeatureCollection",
+        features: trackEvents.map((event, index) => ({
+          type: "Feature",
+          geometry: {
+            type: "Point",
+            coordinates: [event.position.lon, event.position.lat],
+          },
+          properties: {
+            id: event.id,
+            type: event.type,
+            startTime: event.startTime,
+            index,
+          },
+        })),
+      };
+
+      // Create line connecting the points
+      const lineCoordinates = trackEvents.map((e) => [
+        e.position.lon,
+        e.position.lat,
+      ]);
+
+      const trackLine: GeoJSON.Feature = {
+        type: "Feature",
+        geometry: {
+          type: "LineString",
+          coordinates: lineCoordinates,
+        },
+        properties: {},
+      };
+
+      // Add source with both points and line
+      map.current.addSource(trackSourceId, {
+        type: "geojson",
+        data: {
+          type: "FeatureCollection",
+          features: [trackLine, ...trackPoints.features],
+        },
+      });
+
+      // Add track line layer
+      map.current.addLayer({
+        id: trackLineLayerId,
+        type: "line",
+        source: trackSourceId,
+        filter: ["==", "$type", "LineString"],
+        paint: {
+          "line-color": "#ff6b35",
+          "line-width": 2,
+          "line-opacity": 0.8,
+        },
+      });
+
+      // Add track points layer
+      map.current.addLayer({
+        id: trackPointsLayerId,
+        type: "circle",
+        source: trackSourceId,
+        filter: ["==", "$type", "Point"],
+        paint: {
+          "circle-radius": [
+            "interpolate",
+            ["linear"],
+            ["zoom"],
+            3, 3,
+            8, 6,
+            12, 10,
+          ],
+          "circle-color": [
+            "match",
+            ["get", "type"],
+            "fishing", "#ff6b35",
+            "loitering", "#ffd700",
+            "port_visit", "#00ff88",
+            "encounter", "#ff00ff",
+            "gap", "#ff0000",
+            "#ff6b35", // default
+          ],
+          "circle-stroke-color": "#ffffff",
+          "circle-stroke-width": 1.5,
+          "circle-opacity": 0.9,
+        },
+      });
+
+      // Fit map to track bounds
+      if (lineCoordinates.length > 1) {
+        const bounds = new mapboxgl.LngLatBounds();
+        lineCoordinates.forEach((coord) => {
+          bounds.extend(coord as [number, number]);
+        });
+
+        map.current.fitBounds(bounds, {
+          padding: { top: 100, right: 400, bottom: 200, left: 100 },
+          maxZoom: 8,
+          duration: 1000,
+        });
+      }
+
+      log("TRACK", "✅ Track displayed", {
+        pointCount: trackEvents.length,
+      });
+    },
+    [isLoaded]
+  );
+
+  // Fetch vessel events when selected vessel changes
+  const fetchVesselTrack = useCallback(
+    async (vessel: SelectedVessel | null) => {
+      if (!vessel) {
+        setVesselTrack(null);
+        return;
+      }
+
+      log("TRACK", "🎣 Fetching track for vessel:", vessel.name);
+      setIsLoadingTrack(true);
+
+      try {
+        const url = new URL("/api/vessel-events", window.location.origin);
+        url.searchParams.set("vessel-id", vessel.vesselId);
+        url.searchParams.set("start-date", startDate);
+        url.searchParams.set("end-date", endDate);
+        url.searchParams.set("type", "fishing");
+        url.searchParams.set("limit", "200");
+
+        const response = await fetch(url.toString());
+
+        if (!response.ok) {
+          throw new Error("Failed to fetch vessel events");
+        }
+
+        const data = await response.json();
+        log("TRACK", "✅ Track data received:", {
+          total: data.total,
+          events: data.events?.length,
+        });
+
+        setVesselTrack(data.events || []);
+      } catch (err) {
+        logError("TRACK", "Failed to fetch track:", err);
+        setVesselTrack(null);
+      } finally {
+        setIsLoadingTrack(false);
+      }
+    },
+    [startDate, endDate]
+  );
+
   // Initialize map
   useEffect(() => {
     log("INIT", "🚀 FishingMap useEffect triggered");
@@ -642,6 +850,25 @@ export default function FishingMap({
     }
   }, [isLoaded, selectedEEZ, eezBuffer, updateEEZLayer]);
 
+  // Fetch vessel track when selected vessel changes
+  useEffect(() => {
+    if (isLoaded) {
+      log("EFFECT", "🚢 Selected vessel changed", {
+        vesselId: selectedVessel?.vesselId,
+        vesselName: selectedVessel?.name,
+      });
+      fetchVesselTrack(selectedVessel || null);
+    }
+  }, [isLoaded, selectedVessel, fetchVesselTrack]);
+
+  // Update track layer when vessel track data changes
+  useEffect(() => {
+    if (isLoaded) {
+      log("EFFECT", "📍 Vessel track data changed, updating layer");
+      updateVesselTrackLayer(vesselTrack);
+    }
+  }, [isLoaded, vesselTrack, updateVesselTrackLayer]);
+
   return (
     <div className="relative w-full h-full">
       <div ref={mapContainer} className="w-full h-full" />
@@ -692,6 +919,33 @@ export default function FishingMap({
             <span className="text-orange-400 font-mono text-sm">
               Fetching GFW style...
             </span>
+          </div>
+        </div>
+      )}
+
+      {/* Track loading indicator */}
+      {isLoaded && isLoadingTrack && (
+        <div className="absolute top-20 left-1/2 transform -translate-x-1/2 bg-black/80 backdrop-blur-sm rounded-lg px-6 py-4 z-40">
+          <div className="flex items-center gap-3">
+            <div className="w-5 h-5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+            <span className="text-orange-400 font-mono text-sm">
+              Loading vessel track...
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Selected vessel info */}
+      {isLoaded && selectedVessel && vesselTrack && vesselTrack.length > 0 && (
+        <div className="absolute top-20 right-4 bg-slate-950/90 backdrop-blur-md border border-orange-900/30 rounded-lg px-4 py-3 z-30">
+          <div className="font-mono text-xs text-slate-500 uppercase mb-1">
+            Tracking
+          </div>
+          <div className="font-mono text-sm text-white font-semibold">
+            {selectedVessel.name}
+          </div>
+          <div className="font-mono text-xs text-orange-400 mt-1">
+            {vesselTrack.length} fishing events
           </div>
         </div>
       )}
