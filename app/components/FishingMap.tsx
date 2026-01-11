@@ -195,7 +195,10 @@ export default function FishingMap({
 
     try {
       // Build URL with SAR-specific params
-      const matchedParam = sarLayer.matched !== "all" ? `&matched=${sarLayer.matched === "matched"}` : "";
+      const matchedParam =
+        sarLayer.matched !== "all"
+          ? `&matched=${sarLayer.matched === "matched"}`
+          : "";
       const url = `/api/sar-style?start=${startDate}&end=${endDate}&interval=DAY${matchedParam}`;
       log("SAR", "📤 Requesting:", url);
 
@@ -209,7 +212,11 @@ export default function FishingMap({
         return null;
       }
 
-      log("SAR", "✅ SAR tile URL received:", data.tileUrl?.substring(0, 80) + "...");
+      log(
+        "SAR",
+        "✅ SAR tile URL received:",
+        data.tileUrl?.substring(0, 80) + "..."
+      );
       addDebug(`SAR style received! ${data.cached ? "(cached)" : "(fresh)"}`);
 
       setSarTileUrl(data.tileUrl);
@@ -267,7 +274,10 @@ export default function FishingMap({
       const interval = gfwUrlObj.searchParams.get("interval") || "DAY";
 
       // Build proxy URL for SAR tiles with the style
-      const matchedParam = sarLayer.matched !== "all" ? `&matched=${sarLayer.matched === "matched"}` : "";
+      const matchedParam =
+        sarLayer.matched !== "all"
+          ? `&matched=${sarLayer.matched === "matched"}`
+          : "";
       const proxyTileUrl = `/api/tiles-sar?z={z}&x={x}&y={y}&start=${startDate}&end=${endDate}&style=${encodeURIComponent(
         style || ""
       )}&interval=${interval}${matchedParam}`;
@@ -310,7 +320,15 @@ export default function FishingMap({
         addDebug(`SAR layer error: ${err}`);
       }
     },
-    [startDate, endDate, isLoaded, sarLayer.enabled, sarLayer.matched, sarLayer.opacity, addDebug]
+    [
+      startDate,
+      endDate,
+      isLoaded,
+      sarLayer.enabled,
+      sarLayer.matched,
+      sarLayer.opacity,
+      addDebug,
+    ]
   );
 
   // Update fishing layer with the tile URL from GFW
@@ -706,18 +724,26 @@ export default function FishingMap({
             "interpolate",
             ["linear"],
             ["zoom"],
-            3, 3,
-            8, 6,
-            12, 10,
+            3,
+            3,
+            8,
+            6,
+            12,
+            10,
           ],
           "circle-color": [
             "match",
             ["get", "type"],
-            "fishing", "#ff6b35",
-            "loitering", "#ffd700",
-            "port_visit", "#00ff88",
-            "encounter", "#ff00ff",
-            "gap", "#ff0000",
+            "fishing",
+            "#ff6b35",
+            "loitering",
+            "#ffd700",
+            "port_visit",
+            "#00ff88",
+            "encounter",
+            "#ff00ff",
+            "gap",
+            "#ff0000",
             "#ff6b35", // default
           ],
           "circle-stroke-color": "#ffffff",
@@ -1036,7 +1062,15 @@ export default function FishingMap({
       setSarTileUrl(null);
       updateSarLayer(null);
     }
-  }, [isLoaded, sarLayer.enabled, sarLayer.matched, startDate, endDate, fetchSarStyle, updateSarLayer]);
+  }, [
+    isLoaded,
+    sarLayer.enabled,
+    sarLayer.matched,
+    startDate,
+    endDate,
+    fetchSarStyle,
+    updateSarLayer,
+  ]);
 
   // Update SAR layer when tile URL is set
   useEffect(() => {
