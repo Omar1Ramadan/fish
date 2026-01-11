@@ -120,10 +120,10 @@ export default function Home() {
                 </div>
                 <div>
                   <h1 className="font-mono text-lg font-bold text-white tracking-tight">
-                    FISHING WATCH
+                    FISHY
                   </h1>
                   <p className="font-mono text-[10px] text-cyan-400/70 uppercase tracking-widest">
-                    Global Activity Monitor
+                    Dark Vessel Monitor
                   </p>
                 </div>
               </div>

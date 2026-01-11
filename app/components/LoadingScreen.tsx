@@ -12,7 +12,9 @@ export default function LoadingScreen({
   onLoadingComplete,
   isMapReady,
 }: LoadingScreenProps) {
-  const [phase, setPhase] = useState<"visible" | "blink1" | "on1" | "blink2" | "hold" | "fadeout" | "done">("visible");
+  const [phase, setPhase] = useState<
+    "visible" | "blink1" | "on1" | "blink2" | "hold" | "fadeout" | "done"
+  >("visible");
 
   // Initial show -> blink1 -> on -> blink2 -> hold -> wait for map -> fadeout
   useEffect(() => {
@@ -68,7 +70,8 @@ export default function LoadingScreen({
         phase === "fadeout" ? "opacity-0" : "opacity-100"
       }`}
       style={{
-        background: "radial-gradient(ellipse at center, #0a1628 0%, #030712 100%)",
+        background:
+          "radial-gradient(ellipse at center, #0a1628 0%, #030712 100%)",
       }}
     >
       {/* Main content */}
@@ -76,13 +79,13 @@ export default function LoadingScreen({
         {/* Globe */}
         <Globe3D size={180} />
 
-        {/* FISH text */}
+        {/* FISHY text */}
         <h1
           className={`font-mono text-8xl font-black tracking-wider text-cyan-400 transition-opacity duration-75 ease-in-out ${
             isBlinkOff ? "opacity-0" : "opacity-100"
           }`}
         >
-          FISH
+          FISHY
         </h1>
 
         {/* Credits */}
