@@ -3,7 +3,7 @@
 import { useRef, useEffect, useState, useCallback } from "react";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
-import PredictionOverlay from "./PredictionOverlay";
+import PredictionOverlay, { PredictionData } from "./PredictionOverlay";
 
 // Logging utility with timestamps
 const log = (category: string, message: string, data?: unknown) => {
@@ -35,14 +35,7 @@ interface FishingMapProps {
   selectedEEZ?: EEZRegion | null;
   eezBuffer?: number;
   excludedCountries?: string[];
-  probabilityCloud?: {
-    type: "FeatureCollection";
-    features: Array<{
-      type: "Feature";
-      geometry: { type: "Point"; coordinates: [number, number] };
-      properties: { probability: number };
-    }>;
-  } | null;
+  predictionResult?: PredictionData | null;
   onMapReady?: (map: mapboxgl.Map) => void;
 }
 
@@ -61,7 +54,7 @@ export default function FishingMap({
   selectedEEZ,
   eezBuffer = 0,
   excludedCountries = [],
-  probabilityCloud,
+  predictionResult,
   onMapReady,
 }: FishingMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
@@ -645,10 +638,11 @@ export default function FishingMap({
   return (
     <div className="relative w-full h-full">
       <div ref={mapContainer} className="w-full h-full" />
-      {mapInstance && probabilityCloud && (
+      {mapInstance && predictionResult && (
         <PredictionOverlay
           map={mapInstance}
-          probabilityCloud={probabilityCloud}
+          probabilityCloud={predictionResult.probabilityCloud}
+          predictionData={predictionResult}
           isVisible={true}
         />
       )}

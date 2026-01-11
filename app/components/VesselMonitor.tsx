@@ -1,6 +1,10 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { PredictionData, ProbabilityCloud } from "./PredictionOverlay";
+
+// Re-export for page.tsx
+export type { PredictionData };
 
 interface EEZRegion {
   id: string;
@@ -21,7 +25,7 @@ interface VesselEvent {
   prediction?: {
     predictedPosition: [number, number];
     uncertaintyNm: number;
-    probabilityCloud: any;
+    probabilityCloud: ProbabilityCloud;
   };
 }
 
@@ -37,7 +41,7 @@ interface VesselMonitorProps {
   startDate: string;
   endDate: string;
   bufferValue: number;
-  onPredictionGenerated?: (probabilityCloud: any) => void;
+  onPredictionGenerated?: (result: PredictionData | null) => void;
 }
 
 export default function VesselMonitor({
@@ -199,7 +203,12 @@ export default function VesselMonitor({
       
       // Notify parent component to update probability cloud on map
       if (onPredictionGenerated && data.probabilityCloud) {
-        onPredictionGenerated(data.probabilityCloud);
+        onPredictionGenerated({
+          startPosition: [event.lastLat, event.lastLon],
+          predictedPosition: data.prediction.predictedPosition,
+          uncertaintyNm: data.prediction.uncertaintyNm,
+          probabilityCloud: data.probabilityCloud,
+        });
       }
     } catch (error) {
       console.error("Failed to generate prediction:", error);
@@ -344,7 +353,7 @@ export default function VesselMonitor({
 
           {/* Info */}
           <div className="text-xs text-slate-500 font-mono pt-2 border-t border-slate-800">
-            Detects vessels that go dark near protected zones. Click "Predict Path" to generate probability cloud.
+            Detects vessels that go dark near protected zones. Click Predict Path to see where they might be.
           </div>
         </div>
       )}

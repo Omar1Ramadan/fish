@@ -15,6 +15,9 @@ const logError = (message: string, error?: unknown) => {
   console.error(`[${timestamp}] [PREDICT PATH API] ❌ ${message}`, error);
 };
 
+// Python ML server URL
+const ML_SERVER_URL = process.env.ML_SERVER_URL || "http://localhost:8000";
+
 interface PredictPathRequest {
   vesselId: string;
   lastPosition: {
@@ -29,9 +32,31 @@ interface PredictPathRequest {
     lon: number;
     speed?: number;
     course?: number;
-    timestamp?: number;
+    timestamp?: string;
   }>;
   modelType?: "baseline" | "lstm";
+}
+
+interface MLServerResponse {
+  vessel_id: string;
+  predicted_position: [number, number];
+  uncertainty_nm: number;
+  uncertainty_degrees: [number, number];
+  method: string;
+  model_confidence?: number;
+  probability_cloud: {
+    type: "FeatureCollection";
+    features: Array<{
+      type: "Feature";
+      geometry: {
+        type: "Point";
+        coordinates: [number, number];
+      };
+      properties: {
+        probability: number;
+      };
+    }>;
+  };
 }
 
 export async function POST(request: NextRequest) {
@@ -43,11 +68,11 @@ export async function POST(request: NextRequest) {
     const {
       vesselId,
       lastPosition,
-      lastSpeed = 0,
-      lastCourse = 0,
+      lastSpeed = 5.0,
+      lastCourse = 0.0,
       gapDurationHours,
       sequence,
-      modelType = "baseline",
+      modelType = "lstm", // Default to LSTM now!
     } = body;
 
     log("📍 Request params:", {
@@ -65,8 +90,78 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Call Python prediction service
-    // For now, use baseline model (can be extended to call Python service)
+    // Try to call Python ML server first
+    let mlServerAvailable = false;
+    let mlResponse: MLServerResponse | null = null;
+
+    try {
+      log("🐍 Calling Python ML server at", ML_SERVER_URL);
+      
+      const mlRequest = {
+        vessel_id: vesselId,
+        last_position: {
+          lat: lastPosition.lat,
+          lon: lastPosition.lon,
+          speed: lastSpeed,
+          course: lastCourse,
+        },
+        gap_duration_hours: gapDurationHours,
+        sequence: sequence?.map(s => ({
+          lat: s.lat,
+          lon: s.lon,
+          speed: s.speed || 0,
+          course: s.course || 0,
+          timestamp: s.timestamp,
+        })),
+        model_type: modelType,
+      };
+
+      const response = await fetch(`${ML_SERVER_URL}/predict`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(mlRequest),
+      });
+
+      if (response.ok) {
+        mlResponse = await response.json();
+        mlServerAvailable = true;
+        log("✅ ML server response received", {
+          method: mlResponse?.method,
+          confidence: mlResponse?.model_confidence,
+        });
+      } else {
+        log("⚠️ ML server returned error:", response.status);
+      }
+    } catch (mlError) {
+      log("⚠️ ML server not available, falling back to JS baseline:", mlError);
+    }
+
+    // If ML server responded, use its prediction
+    if (mlServerAvailable && mlResponse) {
+      return NextResponse.json({
+        vesselId,
+        prediction: {
+          predictedPosition: mlResponse.predicted_position,
+          uncertaintyNm: mlResponse.uncertainty_nm,
+          uncertaintyDegrees: mlResponse.uncertainty_degrees,
+          distanceTraveledNm: 0, // Not provided by ML server
+          method: mlResponse.method,
+          confidence: mlResponse.model_confidence,
+        },
+        probabilityCloud: mlResponse.probability_cloud,
+        metadata: {
+          modelType: mlResponse.method,
+          gapDurationHours,
+          timestamp: new Date().toISOString(),
+          mlServerUsed: true,
+        },
+      });
+    }
+
+    // Fallback to JavaScript baseline (only if ML server not available)
+    log("📐 Using JavaScript baseline fallback");
     const prediction = await predictPathBaseline(
       lastPosition,
       lastSpeed,
@@ -80,9 +175,10 @@ export async function POST(request: NextRequest) {
       prediction.uncertaintyDegrees,
     );
 
-    log("✅ Prediction generated", {
+    log("✅ Prediction generated (JS fallback)", {
       predictedPosition: prediction.predictedPosition,
       uncertaintyNm: prediction.uncertaintyNm,
+      method: "js_fallback",
     });
 
     return NextResponse.json({
@@ -92,13 +188,15 @@ export async function POST(request: NextRequest) {
         uncertaintyNm: prediction.uncertaintyNm,
         uncertaintyDegrees: prediction.uncertaintyDegrees,
         distanceTraveledNm: prediction.distanceTraveledNm,
-        method: prediction.method,
+        method: prediction.method + "_js_fallback",
       },
       probabilityCloud,
       metadata: {
-        modelType,
+        modelType: "baseline_js_fallback",
         gapDurationHours,
         timestamp: new Date().toISOString(),
+        mlServerUsed: false,
+        warning: "ML server not available - using JavaScript fallback",
       },
     });
   } catch (error) {
@@ -114,8 +212,8 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * Baseline dead reckoning prediction (JavaScript implementation)
- * Matches Python baseline model logic
+ * Baseline dead reckoning prediction (JavaScript fallback)
+ * Only used when Python ML server is not available
  */
 async function predictPathBaseline(
   lastPosition: { lat: number; lon: number },
@@ -182,12 +280,13 @@ async function predictPathBaseline(
 
 /**
  * Generate probability cloud (grid of probabilities)
+ * Only used for JS fallback
  */
 function generateProbabilityCloud(
   predictedPosition: [number, number],
   uncertaintyDegrees: [number, number],
-  gridSize: number = 50,
-  numStd: number = 2.0
+  gridSize: number = 40,
+  numStd: number = 2.5
 ): {
   type: "FeatureCollection";
   features: Array<{

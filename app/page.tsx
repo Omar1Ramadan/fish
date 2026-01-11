@@ -6,7 +6,7 @@ import TimelineSlider from "./components/TimelineSlider";
 import EEZSelector from "./components/EEZSelector";
 import CountryFilter from "./components/CountryFilter";
 import LoadingScreen from "./components/LoadingScreen";
-import VesselMonitor from "./components/VesselMonitor";
+import VesselMonitor, { PredictionData } from "./components/VesselMonitor";
 
 // Dynamic import to avoid SSR issues with Mapbox
 const FishingMap = dynamic(() => import("./components/FishingMap"), {
@@ -47,6 +47,7 @@ export default function Home() {
   const [excludedCountries, setExcludedCountries] = useState<string[]>([]);
   const [isMapReady, setIsMapReady] = useState(false);
   const [showLoadingScreen, setShowLoadingScreen] = useState(true);
+  const [predictionResult, setPredictionResult] = useState<PredictionData | null>(null);
 
   const handleDateChange = useCallback((start: string, end: string) => {
     setStartDate(start);
@@ -72,6 +73,7 @@ export default function Home() {
         selectedEEZ={selectedEEZ}
         eezBuffer={eezBuffer}
         excludedCountries={excludedCountries}
+        predictionResult={predictionResult}
         onMapReady={handleMapReady}
       />
 
@@ -110,7 +112,7 @@ export default function Home() {
       </div>
 
       {/* EEZ Selector and Country Filter */}
-      <div className="absolute top-4 right-4 pointer-events-auto">
+      <div className="absolute top-4 right-4 pointer-events-auto z-20">
         <div className="w-80 space-y-3">
           <EEZSelector
             selectedRegion={selectedEEZ}
@@ -158,7 +160,7 @@ export default function Home() {
           startDate={startDate}
           endDate={endDate}
           bufferValue={eezBuffer}
-          // onPredictionGenerated={setProbabilityCloud}
+          onPredictionGenerated={setPredictionResult}
         />
       </div>
 

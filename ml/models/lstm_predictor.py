@@ -184,8 +184,16 @@ class LSTMPredictor:
         if not os.path.exists(filepath):
             raise FileNotFoundError(f"Model file not found: {filepath}")
         
-        self.model = keras.models.load_model(filepath)
-        print(f"✅ Loaded model from {filepath}")
+        # Load without compiling to avoid metric deserialization issues
+        self.model = keras.models.load_model(filepath, compile=False)
+        
+        # Recompile with same settings
+        self.model.compile(
+            optimizer=keras.optimizers.Adam(learning_rate=0.001),
+            loss='mse',
+            metrics=['mae'],
+        )
+        print(f"✅ Loaded and recompiled model from {filepath}")
     
     def evaluate(
         self,

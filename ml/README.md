@@ -1,153 +1,111 @@
-# Dark Zone Predictor ML Pipeline
+# Dark Zone Predictor - ML Pipeline
 
-Machine learning pipeline for predicting vessel positions when AIS signals go dark.
-
-## Overview
-
-This pipeline implements a simplified approach to vessel path prediction:
-- **No complex labels**: Focuses on position prediction, not activity classification
-- **Self-supervised learning**: Uses actual vessel positions as training targets
-- **Physics-based baseline**: Dead reckoning model for quick validation
-- **LSTM model**: Deep learning model for improved predictions
+Predicts vessel positions after AIS gaps using an LSTM velocity model.
 
 ## Quick Start
 
-### 1. Install Dependencies
-
 ```bash
-cd src_ml
-pip install -r requirements.txt
+# Activate environment
+cd ml && source venv/bin/activate
+
+# Start prediction server
+python prediction_server.py
+# Server runs at http://localhost:8000
 ```
 
-### 2. Set Environment Variable
+## Project Structure
 
-```bash
-export FISH_API="your_gfw_api_token_here"
+```
+ml/
+├── prediction_server.py      # FastAPI server (main entry point)
+├── train_v3.py               # Training script
+├── models/
+│   ├── lstm_v3.h5            # Trained LSTM model
+│   ├── normalizer_v3.json    # Feature normalization params
+│   ├── baseline.py           # Dead reckoning baseline
+│   └── lstm_predictor.py     # LSTM model definition
+├── features/
+│   └── normalizer_v3.py      # Velocity normalization
+├── data/
+│   ├── fetch_vessel_tracks.py  # GFW API data fetcher
+│   ├── detect_gaps.py          # AIS gap detection
+│   ├── preprocess_tracks.py    # Sequence builder
+│   ├── raw/                    # Raw API data
+│   ├── gaps/                   # Detected gap events
+│   └── preprocessed/           # Training sequences
+└── prediction/
+    └── generate_cloud.py     # Probability cloud generator
 ```
 
-### 3. Fetch Training Data
+## Retraining Pipeline
 
+### 1. Fetch vessel tracks
 ```bash
 python data/fetch_vessel_tracks.py \
-  --region-id 555635930 \
-  --region-dataset public-mpa-all \
+  --region-id YOUR_REGION_ID \
   --start-date 2024-01-01 \
-  --end-date 2024-03-31 \
-  --output-dir data/raw
+  --end-date 2024-03-31
 ```
 
-### 4. Detect AIS Gaps
-
+### 2. Detect AIS gaps
 ```bash
 python data/detect_gaps.py \
-  data/raw/tracks_*.json \
-  --output data/gaps/gaps.json \
-  --threshold 6.0
+  data/raw/tracks_REGION_DATE.json \
+  --output data/gaps/gaps_REGION.json
 ```
 
-### 5. Preprocess Data
-
+### 3. Preprocess into sequences
 ```bash
 python data/preprocess_tracks.py \
-  data/gaps/gaps.json \
-  --output data/preprocessed/preprocessed.json \
-  --sequence-length 20
+  data/gaps/gaps_REGION.json \
+  --tracks-file data/raw/tracks_REGION_DATE.json \
+  --numpy-output data/preprocessed/sequences_REGION.npz
 ```
 
-### 6. Train Model
-
+### 4. Train model
 ```bash
-python train.py \
-  --tracks-file data/raw/tracks_*.json \
-  --output-dir data/training \
-  --model-dir models \
-  --epochs 50 \
-  --batch-size 32
+python train_v3.py --raw-npz data/preprocessed/sequences_REGION.npz --epochs 200
 ```
 
-## Architecture
-
-```
-GFW API → Data Pipeline → Feature Extraction → ML Model → Prediction API → Visualization
-```
-
-### Data Pipeline
-- `fetch_vessel_tracks.py`: Fetches vessel tracks from GFW 4Wings Report API
-- `detect_gaps.py`: Identifies AIS gap events (vessels going dark)
-- `preprocess_tracks.py`: Converts raw data to ML-ready sequences
-
-### Feature Engineering
-- `extract_features.py`: Extracts essential features (position, speed, course, temporal, spatial)
-- `build_sequences.py`: Creates fixed-length sequences for ML
-
-### Models
-- `baseline.py`: Physics-based dead reckoning (no training needed)
-- `lstm_predictor.py`: LSTM model for position prediction
-
-### Prediction
-- `generate_cloud.py`: Converts predictions to spatial probability distributions
-- API endpoint: `/api/predict-path` (Next.js route)
-
-## Usage
-
-### Generate Prediction (API)
-
+### 5. Restart server
 ```bash
-curl -X POST http://localhost:3000/api/predict-path \
+pkill -f prediction_server.py
+python prediction_server.py
+```
+
+## API Endpoints
+
+### Health Check
+```bash
+curl http://localhost:8000/health
+```
+
+### Predict Path
+```bash
+curl -X POST http://localhost:8000/predict \
   -H "Content-Type: application/json" \
   -d '{
-    "vesselId": "123456789",
-    "lastPosition": {"lat": -0.5, "lon": -90.5},
-    "lastSpeed": 10.0,
-    "lastCourse": 45.0,
-    "gapDurationHours": 6.0,
-    "modelType": "baseline"
+    "vessel_id": "test",
+    "last_position": {"lat": 5.0, "lon": -10.0, "speed": 8.5, "course": 135},
+    "gap_duration_hours": 12,
+    "model_type": "lstm"
   }'
 ```
 
-### Use in Frontend
+## Model Architecture
 
-The `VesselMonitor` component automatically generates predictions when you click "Predict Path" on a dark zone event. The probability cloud is displayed on the map as a heatmap overlay.
+**Velocity Predictor v3**:
+- Input: 20-step trajectory sequence (lat, lon, speed, course)
+- Output: Velocity vector (degrees/hour)
+- Final position = reference + velocity × gap_hours
 
-## File Structure
+This design ensures predictions scale correctly with gap duration.
 
-```
-src_ml/
-├── data/
-│   ├── fetch_vessel_tracks.py      # Fetch from GFW API
-│   ├── detect_gaps.py              # Find AIS gaps
-│   └── preprocess_tracks.py        # Convert to ML format
-├── features/
-│   ├── extract_features.py         # Feature engineering
-│   └── build_sequences.py         # Create sequences
-├── models/
-│   ├── baseline.py                 # Physics-based baseline
-│   └── lstm_predictor.py           # ML model
-├── prediction/
-│   └── generate_cloud.py           # Create probability cloud
-├── train.py                        # Training script
-├── requirements.txt                # Python dependencies
-└── README.md                       # This file
-```
+## Performance
 
-## Features Extracted
-
-- **Position**: lat, lon
-- **Movement**: speed, course, heading
-- **Temporal**: time_diff, hour_of_day
-- **Spatial**: distance_from_last, distance_to_eez
-- **Derived**: velocity_lat, velocity_lon, acceleration, turn_rate
-
-## Model Performance
-
-- **Baseline (Dead Reckoning)**: Fast, interpretable, no training needed
-- **LSTM**: More accurate, learns patterns from historical data
-
-Expected accuracy: Within 50km of actual position after 6-hour gap (70%+ coverage).
-
-## Notes
-
-- The pipeline uses **self-supervised learning**: no manual labeling required
-- Training data is created by predicting next position from previous N positions
-- The baseline model works immediately without training
-- LSTM model requires training on historical vessel tracks
+| Gap Duration | Median Error |
+|--------------|--------------|
+| 1 hour       | ~2 nm        |
+| 6 hours      | ~11 nm       |
+| 12 hours     | ~22 nm       |
+| 24 hours     | ~43 nm       |
