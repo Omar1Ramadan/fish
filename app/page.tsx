@@ -3,6 +3,8 @@
 import { useState } from "react";
 import dynamic from "next/dynamic";
 import TimeControls from "./components/TimeControls";
+import EEZSelector from "./components/EEZSelector";
+import VesselMonitor from "./components/VesselMonitor";
 
 // Dynamic import to avoid SSR issues with Mapbox
 const FishingMap = dynamic(() => import("./components/FishingMap"), {
@@ -29,11 +31,20 @@ const FishingMap = dynamic(() => import("./components/FishingMap"), {
 //   return formatDate(date);
 // }
 
+interface EEZRegion {
+  id: string;
+  name: string;
+  country: string;
+  dataset: string;
+}
+
 export default function Home() {
   // Use a single month of 2024 data - full year saturates colors
   // GFW data has ~96hr delay so recent dates may fail
   const [startDate, setStartDate] = useState("2024-03-01");
   const [endDate, setEndDate] = useState("2024-03-31");
+  const [selectedEEZ, setSelectedEEZ] = useState<EEZRegion | null>(null);
+  const [eezBuffer, setEezBuffer] = useState(0);
 
   const handleDateChange = (start: string, end: string) => {
     setStartDate(start);
@@ -43,7 +54,12 @@ export default function Home() {
   return (
     <div className="relative w-screen h-screen bg-slate-950 overflow-hidden">
       {/* Map takes full viewport */}
-      <FishingMap startDate={startDate} endDate={endDate} />
+      <FishingMap
+        startDate={startDate}
+        endDate={endDate}
+        selectedEEZ={selectedEEZ}
+        eezBuffer={eezBuffer}
+      />
 
       {/* Header overlay */}
       <div className="absolute top-0 left-0 right-0 p-4 pointer-events-none">
@@ -76,6 +92,24 @@ export default function Home() {
               onDateChange={handleDateChange}
             />
           </div>
+        </div>
+      </div>
+
+      {/* EEZ Selector */}
+      <div className="absolute top-4 right-4 pointer-events-auto">
+        <div className="w-80 space-y-3">
+          <EEZSelector
+            selectedRegion={selectedEEZ}
+            onRegionSelect={setSelectedEEZ}
+            onBufferChange={setEezBuffer}
+            bufferValue={eezBuffer}
+          />
+          <VesselMonitor
+            selectedEEZ={selectedEEZ}
+            startDate={startDate}
+            endDate={endDate}
+            bufferValue={eezBuffer}
+          />
         </div>
       </div>
 

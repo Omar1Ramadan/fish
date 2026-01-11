@@ -21,9 +21,18 @@ const logError = (category: string, message: string, error?: unknown) => {
   console.error(`${prefix} ${message}`, error);
 };
 
+interface EEZRegion {
+  id: string;
+  name: string;
+  country: string;
+  dataset: string;
+}
+
 interface FishingMapProps {
   startDate: string;
   endDate: string;
+  selectedEEZ?: EEZRegion | null;
+  eezBuffer?: number;
 }
 
 interface StyleApiResponse {
@@ -35,7 +44,7 @@ interface StyleApiResponse {
   error?: string;
 }
 
-export default function FishingMap({ startDate, endDate }: FishingMapProps) {
+export default function FishingMap({ startDate, endDate, selectedEEZ, eezBuffer = 0 }: FishingMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -48,6 +57,7 @@ export default function FishingMap({ startDate, endDate }: FishingMapProps) {
     zoom: 4,
   });
   const [debugLog, setDebugLog] = useState<string[]>([]);
+  const [showDebugLog, setShowDebugLog] = useState(false);
 
   const addDebug = useCallback((msg: string) => {
     setDebugLog((prev) => [...prev.slice(-9), msg]);
@@ -194,6 +204,180 @@ export default function FishingMap({ startDate, endDate }: FishingMapProps) {
     [startDate, endDate, isLoaded, addDebug]
   );
 
+  // Update EEZ boundary layer
+  const updateEEZLayer = useCallback(
+    async (region: EEZRegion | null, buffer: number) => {
+      log("EEZ", "🔄 updateEEZLayer called", {
+        isLoaded,
+        hasMap: !!map.current,
+        regionId: region?.id,
+        buffer,
+      });
+
+      if (!map.current || !isLoaded) {
+        log("EEZ", "⚠️ Map not ready, skipping EEZ layer update");
+        return;
+      }
+
+      const sourceId = "eez-boundary";
+      const layerId = "eez-boundary-layer";
+      const fillLayerId = `${layerId}-fill`;
+      const bufferSourceId = "eez-buffer";
+      const bufferLayerId = "eez-buffer-layer";
+      const bufferFillLayerId = `${bufferLayerId}-fill`;
+
+      // Remove existing layers FIRST, then sources
+      // Order matters: must remove layers before their sources
+      if (map.current.getLayer(fillLayerId)) {
+        map.current.removeLayer(fillLayerId);
+      }
+      if (map.current.getLayer(layerId)) {
+        map.current.removeLayer(layerId);
+      }
+      if (map.current.getLayer(bufferFillLayerId)) {
+        map.current.removeLayer(bufferFillLayerId);
+      }
+      if (map.current.getLayer(bufferLayerId)) {
+        map.current.removeLayer(bufferLayerId);
+      }
+      // Now safe to remove sources
+      if (map.current.getSource(sourceId)) {
+        map.current.removeSource(sourceId);
+      }
+      if (map.current.getSource(bufferSourceId)) {
+        map.current.removeSource(bufferSourceId);
+      }
+
+      if (!region) {
+        log("EEZ", "✅ EEZ layer removed (no region selected)");
+        addDebug("EEZ layer removed");
+        return;
+      }
+
+      // Fetch actual EEZ boundary from Marine Regions (the source GFW uses)
+      log("EEZ", "🌍 Fetching boundary from Marine Regions", { 
+        regionId: region.id, 
+        regionName: region.name,
+        regionDataset: region.dataset,
+        buffer 
+      });
+      addDebug(`Fetching boundary for ${region.name}...`);
+
+      try {
+        // Fetch boundary GeoJSON from our API (which proxies to Marine Regions)
+        const boundaryUrl = new URL("/api/eez-boundary", window.location.origin);
+        boundaryUrl.searchParams.set("region-id", region.id);
+        boundaryUrl.searchParams.set("region-dataset", region.dataset);
+        if (buffer > 0) {
+          boundaryUrl.searchParams.set("buffer-value", buffer.toString());
+          boundaryUrl.searchParams.set("buffer-unit", "NAUTICALMILES");
+        }
+
+        const response = await fetch(boundaryUrl.toString());
+        
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          logError("EEZ", "Failed to fetch boundary", { 
+            status: response.status, 
+            error: errorData 
+          });
+          addDebug(`⚠️ Boundary fetch failed: ${response.status}`);
+          return;
+        }
+
+        const geoJson = await response.json();
+        
+        if (!geoJson.features || geoJson.features.length === 0) {
+          log("EEZ", "⚠️ No boundary features returned");
+          addDebug(`⚠️ No boundary data available`);
+          return;
+        }
+
+        log("EEZ", "✅ Boundary fetched", { 
+          featureCount: geoJson.features.length 
+        });
+
+        // Add GeoJSON source
+        map.current.addSource(sourceId, {
+          type: "geojson",
+          data: geoJson,
+        });
+
+        // Add fill layer
+        map.current.addLayer({
+          id: fillLayerId,
+          type: "fill",
+          source: sourceId,
+          paint: {
+            "fill-color": buffer > 0 ? "#ffaa00" : "#00ffff",
+            "fill-opacity": buffer > 0 ? 0.08 : 0.12,
+          },
+        });
+
+        // Add outline layer
+        map.current.addLayer({
+          id: layerId,
+          type: "line",
+          source: sourceId,
+          paint: {
+            "line-color": buffer > 0 ? "#ffaa00" : "#00ffff",
+            "line-width": buffer > 0 ? 1.5 : 2,
+            "line-opacity": 0.8,
+            "line-dasharray": buffer > 0 ? [1, 1] : [2, 2],
+          },
+        });
+
+        // Fit map to boundary bounds
+        const bounds = new mapboxgl.LngLatBounds();
+        geoJson.features.forEach((feature: {
+          geometry: {
+            type: string;
+            coordinates: number[] | number[][] | number[][][];
+          };
+        }) => {
+          if (feature.geometry.type === "Polygon") {
+            const coords = feature.geometry.coordinates as number[][][];
+            if (coords && coords[0]) {
+              coords[0].forEach((coord: number[]) => {
+                if (coord.length >= 2) {
+                  bounds.extend([coord[0], coord[1]] as [number, number]);
+                }
+              });
+            }
+          } else if (feature.geometry.type === "MultiPolygon") {
+            const polygons = feature.geometry.coordinates as unknown as number[][][][];
+            polygons.forEach((polygon: number[][][]) => {
+              if (polygon && polygon[0]) {
+                polygon[0].forEach((coord: number[]) => {
+                  if (coord.length >= 2) {
+                    bounds.extend([coord[0], coord[1]] as [number, number]);
+                  }
+                });
+              }
+            });
+          }
+        });
+
+        if (!bounds.isEmpty()) {
+          map.current.fitBounds(bounds, {
+            padding: 50,
+            maxZoom: 8
+          });
+        }
+
+        log("EEZ", "✅ Boundary displayed", { 
+          regionId: region.id, 
+          regionName: region.name 
+        });
+        addDebug(`✅ Boundary displayed from Marine Regions`);
+      } catch (err) {
+        logError("EEZ", "Failed to fetch/display boundary:", err);
+        addDebug(`❌ Error: ${err instanceof Error ? err.message : "Unknown error"}`);
+      }
+    },
+    [isLoaded, addDebug]
+  );
+
   // Initialize map
   useEffect(() => {
     log("INIT", "🚀 FishingMap useEffect triggered");
@@ -298,10 +482,31 @@ export default function FishingMap({ startDate, endDate }: FishingMapProps) {
     });
 
     currentMap.on("error", (e) => {
-      logError("EVENT", "Map error event:", e);
-      // Don't set mapError for tile loading errors
-      if (!e.error?.message?.includes("tile")) {
-        setMapError(`Map error: ${e.error?.message || "unknown"}`);
+      // Only log non-tile errors to avoid noise from expected failures
+      const errorMsg = e.error?.message || "";
+      const errorStatus = (e.error as { status?: number })?.status;
+      
+      // Ignore expected errors:
+      // - Tile loading errors (404, 422, etc.)
+      // - Source/layer errors from EEZ boundary (which may not be available)
+      // - Vector tile parsing errors
+      const isExpectedError = 
+        errorMsg.includes("tile") ||
+        errorMsg.includes("404") ||
+        errorMsg.includes("422") ||
+        errorMsg.includes("Not Found") ||
+        errorMsg.includes("Unprocessable") ||
+        errorMsg.includes("vector") ||
+        (errorMsg.includes("source") && (errorMsg.includes("eez") || errorMsg.includes("boundary"))) ||
+        errorStatus === 404 ||
+        errorStatus === 422;
+      
+      if (!isExpectedError) {
+        logError("EVENT", "Map error event:", e);
+        // Don't set mapError for expected failures
+        if (!errorMsg.includes("layer")) {
+          setMapError(`Map error: ${errorMsg || "unknown"}`);
+        }
       }
     });
 
@@ -362,6 +567,14 @@ export default function FishingMap({ startDate, endDate }: FishingMapProps) {
     }
   }, [isLoaded, tileUrl, updateFishingLayer]);
 
+  // Update EEZ layer when region or buffer changes
+  useEffect(() => {
+    if (isLoaded) {
+      log("EFFECT", "🌍 EEZ region changed, updating boundary layer");
+      updateEEZLayer(selectedEEZ || null, eezBuffer || 0);
+    }
+  }, [isLoaded, selectedEEZ, eezBuffer, updateEEZLayer]);
+
   return (
     <div className="relative w-full h-full">
       <div ref={mapContainer} className="w-full h-full" />
@@ -375,26 +588,46 @@ export default function FishingMap({ startDate, endDate }: FishingMapProps) {
         {coordinates.zoom.toFixed(1)}
       </div>
 
+      {/* Debug panel toggle button */}
+      <button
+        onClick={() => setShowDebugLog(!showDebugLog)}
+        className="absolute top-20 right-4 bg-black/90 backdrop-blur-sm border border-orange-900/50 hover:border-orange-700/70 rounded px-3 py-2 font-mono text-xs text-orange-400 hover:text-orange-300 z-50 transition-colors"
+        title={showDebugLog ? "Hide debug log" : "Show debug log"}
+      >
+        {showDebugLog ? "🔍 Hide Debug" : "🔍 Show Debug"}
+      </button>
+
       {/* Debug panel */}
-      <div className="absolute top-20 right-4 bg-black/90 backdrop-blur-sm border border-orange-900/50 rounded px-3 py-2 font-mono text-xs max-w-xs z-50">
-        <div className="text-orange-400 mb-2 font-bold">🔍 DEBUG LOG</div>
-        <div className="space-y-1 text-orange-300/80">
-          {debugLog.map((msg, i) => (
-            <div key={i} className="text-[10px]">
-              {msg}
-            </div>
-          ))}
-          {debugLog.length === 0 && (
-            <div className="text-[10px] text-orange-500">
-              Check browser console for logs
-            </div>
-          )}
+      {showDebugLog && (
+        <div className="absolute top-32 right-4 bg-black/90 backdrop-blur-sm border border-orange-900/50 rounded px-3 py-2 font-mono text-xs max-w-xs z-50">
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-orange-400 font-bold">🔍 DEBUG LOG</div>
+            <button
+              onClick={() => setShowDebugLog(false)}
+              className="text-orange-500 hover:text-orange-400 text-[10px]"
+              title="Close"
+            >
+              ✕
+            </button>
+          </div>
+          <div className="space-y-1 text-orange-300/80 max-h-64 overflow-y-auto">
+            {debugLog.map((msg, i) => (
+              <div key={i} className="text-[10px]">
+                {msg}
+              </div>
+            ))}
+            {debugLog.length === 0 && (
+              <div className="text-[10px] text-orange-500">
+                Check browser console for logs
+              </div>
+            )}
+          </div>
+          <div className="mt-2 pt-2 border-t border-orange-900/30 text-[10px] text-orange-500 space-y-1">
+            <div>Map: {isLoaded ? "✅" : "❌"}</div>
+            <div>Style: {tileUrl ? "✅" : isLoadingStyle ? "⏳" : "❌"}</div>
+          </div>
         </div>
-        <div className="mt-2 pt-2 border-t border-orange-900/30 text-[10px] text-orange-500 space-y-1">
-          <div>Map: {isLoaded ? "✅" : "❌"}</div>
-          <div>Style: {tileUrl ? "✅" : isLoadingStyle ? "⏳" : "❌"}</div>
-        </div>
-      </div>
+      )}
 
       {/* Error display */}
       {mapError && (
