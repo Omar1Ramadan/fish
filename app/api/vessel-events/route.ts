@@ -308,9 +308,9 @@ export async function POST(request: NextRequest) {
 
     log("✅ All events fetched", {
       totalEvents: allEvents.length,
-      byType: eventTypes.map((t) => ({
+      byType: eventTypes.map((t: string) => ({
         type: t,
-        count: allEvents.filter((e) => e.type === t).length,
+        count: allEvents.filter((e: { type: string }) => e.type === t).length,
       })),
     });
 

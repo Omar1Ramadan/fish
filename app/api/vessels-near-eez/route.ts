@@ -25,6 +25,11 @@ interface VesselsNearEEZRequest {
 }
 
 // Types for GFW API response (handles both snake_case and camelCase)
+interface GFWReportResponse {
+  total?: number;
+  entries: Array<Record<string, GFWVesselEntry[]>>;
+}
+
 interface GFWVesselEntry {
   // GFW uses snake_case for vessel_id but camelCase for shipName
   vessel_id?: string;
@@ -342,11 +347,11 @@ export async function GET(request: NextRequest) {
         
         for (const entry of vesselData) {
           vessels.push({
-            vesselId: entry.vesselId,
+            vesselId: entry.vesselId || entry.vessel_id || "",
             mmsi: entry.mmsi || "",
-            name: entry.shipName || "Unknown",
+            name: entry.shipName || entry.ship_name || "Unknown",
             flag: entry.flag || "UNK",
-            gearType: entry.geartype || "unknown",
+            gearType: entry.geartype || entry.gear_type || "unknown",
             fishingHours: entry.hours || 0,
           });
         }
