@@ -50,8 +50,18 @@ export default function Home() {
   const [excludedCountries, setExcludedCountries] = useState<string[]>([]);
   const [isMapReady, setIsMapReady] = useState(false);
   const [showLoadingScreen, setShowLoadingScreen] = useState(true);
-  const [predictionResult, setPredictionResult] = useState<PredictionData | null>(null);
-  const [selectedVessel, setSelectedVessel] = useState<Vessel | null>(null);
+  const [predictionResult, setPredictionResult] =
+    useState<PredictionData | null>(null);
+  const [selectedVessel, setSelectedVessel] = useState<{
+    vesselId: string;
+    mmsi: string;
+    name: string;
+    flag: string;
+    gearType: string;
+    fishingHours: number;
+  } | null>(null);
+
+  // SAR layer state
   const [sarLayer, setSarLayer] = useState<SARLayerOptions>({
     enabled: false,
     matched: "all",
@@ -138,9 +148,10 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Info panel */}
-      <div className="absolute left-4 top-24 pointer-events-auto max-w-xs">
-        <div className="bg-slate-950/90 backdrop-blur-md border border-cyan-900/30 rounded-lg px-4 py-3 shadow-2xl shadow-cyan-950/20">
+      {/* Left Panel - Data layers and Vessel List */}
+      <div className="absolute left-4 top-24 bottom-20 pointer-events-auto w-80 flex flex-col gap-3 overflow-hidden">
+        {/* Data Source Info */}
+        <div className="bg-slate-950/90 backdrop-blur-md border border-cyan-900/30 rounded-lg px-4 py-3 shadow-2xl shadow-cyan-950/20 flex-shrink-0">
           <div className="font-mono text-xs text-slate-500 uppercase mb-2">
             Data Source
           </div>
@@ -156,100 +167,75 @@ export default function Home() {
             </a>
             . Brighter areas indicate more fishing hours.
           </p>
-          <div className="mt-3 pt-3 border-t border-slate-800">
-            <div className="font-mono text-[10px] text-slate-600">
-              TIP: Zoom into the Galápagos Islands to see fishing fleet clusters
-            </div>
-          </div>
         </div>
-        
-        {/* SAR Layer Controls */}
-        <div className="mt-3 bg-slate-950/90 backdrop-blur-md border border-purple-900/30 rounded-lg px-4 py-3 shadow-2xl shadow-purple-950/20">
-          <div className="flex items-center justify-between mb-3">
+
+        {/* SAR Layer Toggle - Compact */}
+        <div className="bg-slate-950/90 backdrop-blur-md border border-purple-900/30 rounded-lg px-4 py-3 shadow-2xl shadow-purple-950/20 flex-shrink-0">
+          <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className={`w-2 h-2 rounded-full ${sarLayer.enabled ? 'bg-purple-400' : 'bg-slate-600'}`} />
+              <div
+                className={`w-2 h-2 rounded-full ${
+                  sarLayer.enabled ? "bg-purple-400" : "bg-slate-600"
+                }`}
+              />
               <span className="font-mono text-xs text-slate-400 uppercase">
                 SAR Detections
               </span>
             </div>
             <button
-              onClick={() => setSarLayer(prev => ({ ...prev, enabled: !prev.enabled }))}
+              onClick={() =>
+                setSarLayer((prev) => ({ ...prev, enabled: !prev.enabled }))
+              }
               className={`relative w-10 h-5 rounded-full transition-colors ${
-                sarLayer.enabled ? 'bg-purple-600' : 'bg-slate-700'
+                sarLayer.enabled ? "bg-purple-600" : "bg-slate-700"
               }`}
             >
               <div
                 className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
-                  sarLayer.enabled ? 'translate-x-5' : 'translate-x-0'
+                  sarLayer.enabled ? "translate-x-5" : "translate-x-0"
                 }`}
               />
             </button>
           </div>
-          
+
           {sarLayer.enabled && (
-            <div className="space-y-3">
-              {/* AIS Match Filter */}
-              <div>
-                <div className="font-mono text-[10px] text-slate-500 uppercase mb-1.5">
-                  AIS Match
-                </div>
-                <div className="flex gap-1">
-                  {(["all", "matched", "unmatched"] as const).map((option) => (
-                    <button
-                      key={option}
-                      onClick={() => setSarLayer(prev => ({ ...prev, matched: option }))}
-                      className={`flex-1 px-2 py-1 rounded text-[10px] font-mono uppercase transition-colors ${
-                        sarLayer.matched === option
-                          ? 'bg-purple-600 text-white'
-                          : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
-                      }`}
-                    >
-                      {option}
-                    </button>
-                  ))}
-                </div>
+            <div className="mt-3 pt-3 border-t border-slate-800 space-y-2">
+              <div className="flex gap-1">
+                {(["all", "matched", "unmatched"] as const).map((option) => (
+                  <button
+                    key={option}
+                    onClick={() =>
+                      setSarLayer((prev) => ({ ...prev, matched: option }))
+                    }
+                    className={`flex-1 px-2 py-1 rounded text-[10px] font-mono uppercase transition-colors ${
+                      sarLayer.matched === option
+                        ? "bg-purple-600 text-white"
+                        : "bg-slate-800 text-slate-400 hover:bg-slate-700"
+                    }`}
+                  >
+                    {option}
+                  </button>
+                ))}
               </div>
-              
-              {/* Opacity Slider */}
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="font-mono text-[10px] text-slate-500 uppercase">
-                    Opacity
-                  </span>
-                  <span className="font-mono text-[10px] text-purple-400">
-                    {Math.round((sarLayer.opacity ?? 0.9) * 100)}%
-                  </span>
-                </div>
-                <input
-                  type="range"
-                  min="0.1"
-                  max="1"
-                  step="0.1"
-                  value={sarLayer.opacity ?? 0.9}
-                  onChange={(e) => setSarLayer(prev => ({ ...prev, opacity: parseFloat(e.target.value) }))}
-                  className="w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-purple-500"
-                />
-              </div>
-              
-              <p className="text-[10px] text-slate-500 leading-relaxed">
-                Satellite radar detections of vessels. Purple intensity shows detection density.
-                <span className="text-purple-400"> Unmatched</span> = no AIS signal (possible dark vessels).
+              <p className="text-[10px] text-slate-500">
+                <span className="text-purple-400">Unmatched</span> = no AIS
+                (dark vessels)
               </p>
             </div>
           )}
         </div>
-      </div>
 
-      {/* Vessel List - left side, position adjusted based on SAR panel */}
-      <div className={`absolute left-4 pointer-events-auto w-80 ${sarLayer.enabled ? 'top-[420px]' : 'top-[280px]'}`}>
-        <VesselList
-          selectedEEZ={selectedEEZ}
-          startDate={startDate}
-          endDate={endDate}
-          bufferValue={eezBuffer}
-          selectedVessel={selectedVessel}
-          onVesselSelect={setSelectedVessel}
-        />
+        {/* Vessel List - fills remaining space */}
+        <div className="flex-1 min-h-0 overflow-hidden">
+          <VesselList
+            selectedEEZ={selectedEEZ}
+            startDate={startDate}
+            endDate={endDate}
+            bufferValue={eezBuffer}
+            selectedVessel={selectedVessel}
+            onVesselSelect={setSelectedVessel}
+          />
+        </div>
       </div>
 
       {/* Timeline Slider - fixed at bottom */}
